@@ -87,3 +87,43 @@ func TestNewLocalAssetCache(t *testing.T) {
 		})
 	}
 }
+
+func TestNewLocalAsset(t *testing.T) {
+	testDirPath := t.TempDir()
+
+	testFilePath := filepath.Join(testDirPath, "file.jpg")
+	err := os.WriteFile(
+		testFilePath,
+		[]byte{},
+		0o777,
+	)
+	if err != nil {
+		t.Fatalf("could not make temp file %q: %v", testFilePath, err)
+	}
+
+	tests := []struct {
+		name        string
+		path        string
+		expectedErr error
+	}{
+		{
+			name:        "no error",
+			path:        testFilePath,
+			expectedErr: nil,
+		},
+		{
+			"path is not a file",
+			testDirPath,
+			ErrNotAFile,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := NewLocalAsset(test.path)
+			if !errors.Is(err, test.expectedErr) {
+				t.Errorf("got %v, want %v", err, test.expectedErr)
+			}
+		})
+	}
+}
