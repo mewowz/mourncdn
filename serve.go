@@ -1,4 +1,4 @@
-package mourncdn
+package main
 
 import (
 	"errors"
