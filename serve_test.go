@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -124,7 +127,7 @@ func TestNewLocalAssetServer(t *testing.T) {
 	}
 }
 
-func TestLocalAssetServerCacheAndFetch(t *testing.T) {
+func TestLocalAssetServer_cacheAndFetch(t *testing.T) {
 	tests := []struct {
 		name           string
 		fileName       string
@@ -253,6 +256,155 @@ func TestLocalAssetServerCacheAndFetch(t *testing.T) {
 					"got.IsCached()=%v, want %v",
 					got.IsCached(),
 					test.expectedCached,
+				)
+			}
+		})
+	}
+}
+
+type errorResponseWriter struct {
+	header http.Header
+	err    error
+}
+
+func (w *errorResponseWriter) Header() http.Header {
+	return w.header
+}
+
+func (w *errorResponseWriter) Write([]byte) (int, error) {
+	return 0, w.err
+}
+
+func (w *errorResponseWriter) WriteHeader(statusCode int) {}
+
+func TestLocalAssetServer_writeAssetToClient(t *testing.T) {
+	errWrite := errors.New("write error")
+
+	tests := []struct {
+		name          string
+		fileData      []byte
+		cacheAsset    bool
+		removeFile    bool
+		cancelRequest bool
+		writeErr      error
+		expectedErr   error
+	}{
+		{
+			"uncached asset written",
+			[]byte{0x01},
+			false,
+			false,
+			false,
+			nil,
+			nil,
+		},
+		{
+			"cached asset written",
+			[]byte{0x01},
+			true,
+			false,
+			false,
+			nil,
+			nil,
+		},
+		{
+			"asset open error propagated",
+			[]byte{0x01},
+			false,
+			true,
+			false,
+			nil,
+			os.ErrNotExist,
+		},
+		{
+			"cancelled request propagated",
+			[]byte{0x01},
+			false,
+			false,
+			true,
+			nil,
+			context.Canceled,
+		},
+		{
+			"write error propagated",
+			[]byte{0x01},
+			false,
+			false,
+			false,
+			errWrite,
+			errWrite,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			testDirPath := t.TempDir()
+			filePath := filepath.Join(testDirPath, "abcd.jpg")
+
+			if err := os.WriteFile(filePath, test.fileData, 0o777); err != nil {
+				t.Fatal(err)
+			}
+
+			asset, err := NewLocalAsset(filePath)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if test.cacheAsset {
+				if err = asset.cache(time.Now().Add(time.Hour)); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			if test.removeFile {
+				if err = os.Remove(filePath); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			server := &LocalAssetServer{
+				writeBufSize: 3,
+				writeWindow:  time.Second,
+			}
+
+			req := httptest.NewRequest(
+				http.MethodGet,
+				"/abcd.jpg",
+				nil,
+			)
+
+			if test.cancelRequest {
+				ctx, cancel := context.WithCancel(req.Context())
+				cancel()
+				req = req.WithContext(ctx)
+			}
+
+			var recorder *httptest.ResponseRecorder
+			var writer http.ResponseWriter
+
+			if test.writeErr != nil {
+				writer = &errorResponseWriter{
+					header: make(http.Header),
+					err:    test.writeErr,
+				}
+			} else {
+				recorder = httptest.NewRecorder()
+				writer = recorder
+			}
+
+			err = server.writeAssetToClient(asset, writer, req)
+			if !errors.Is(err, test.expectedErr) {
+				t.Fatalf("got err=%v, want %v", err, test.expectedErr)
+			}
+
+			if test.expectedErr != nil {
+				return
+			}
+
+			if got := recorder.Body.Bytes(); !cmp.Equal(got, test.fileData) {
+				t.Errorf(
+					"written data mismatch (-want, +got):\n%s",
+					cmp.Diff(test.fileData, got),
 				)
 			}
 		})
