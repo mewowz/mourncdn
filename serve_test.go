@@ -263,8 +263,9 @@ func TestLocalAssetServer_cacheAndFetch(t *testing.T) {
 }
 
 type errorResponseWriter struct {
-	header http.Header
-	err    error
+	header     http.Header
+	err        error
+	statusCode int
 }
 
 func (w *errorResponseWriter) Header() http.Header {
@@ -275,7 +276,9 @@ func (w *errorResponseWriter) Write([]byte) (int, error) {
 	return 0, w.err
 }
 
-func (w *errorResponseWriter) WriteHeader(statusCode int) {}
+func (w *errorResponseWriter) WriteHeader(statusCode int) {
+	w.statusCode = statusCode
+}
 
 func TestLocalAssetServer_writeAssetToClient(t *testing.T) {
 	errWrite := errors.New("write error")
@@ -405,6 +408,56 @@ func TestLocalAssetServer_writeAssetToClient(t *testing.T) {
 				t.Errorf(
 					"written data mismatch (-want, +got):\n%s",
 					cmp.Diff(test.fileData, got),
+				)
+			}
+		})
+	}
+}
+
+func TestLocalAssetServer_handleCachAndFetchErr(t *testing.T) {
+	unknownErr := errors.New("unknown error")
+	tests := []struct {
+		name           string
+		err            error
+		expectedStatus int
+	}{
+		{
+			"unknown error propagates status 500",
+			unknownErr,
+			http.StatusInternalServerError,
+		},
+		{
+			"invalid asset name propagates status 404",
+			ErrInvalidAssetName,
+			http.StatusNotFound,
+		},
+		{
+			"not a file propagates status 404",
+			ErrNotAFile,
+			http.StatusNotFound,
+		},
+		{
+			"file not exist propagates status 404",
+			os.ErrNotExist,
+			http.StatusNotFound,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assetServer := &LocalAssetServer{}
+			writer := &errorResponseWriter{
+				header: make(http.Header),
+			}
+			assetServer.handleCacheAndFetchErr(
+				test.err,
+				writer,
+			)
+			if writer.statusCode != test.expectedStatus {
+				t.Fatalf(
+					"got writer.statusCode=%v, want %v",
+					writer.statusCode,
+					test.expectedStatus,
 				)
 			}
 		})
