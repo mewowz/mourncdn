@@ -2,6 +2,7 @@ package main
 
 import (
 	"io/fs"
+	"net/http"
 	"time"
 )
 
@@ -12,6 +13,12 @@ type MockFileInfo struct {
 	modTime time.Time
 	isDir   bool
 	sys     any
+}
+
+type errorResponseWriter struct {
+	header     http.Header
+	err        error
+	statusCode int
 }
 
 func (m *MockFileInfo) Name() string {
@@ -36,4 +43,16 @@ func (m *MockFileInfo) IsDir() bool {
 
 func (m *MockFileInfo) Sys() any {
 	return m.sys
+}
+
+func (w *errorResponseWriter) Header() http.Header {
+	return w.header
+}
+
+func (w *errorResponseWriter) Write([]byte) (int, error) {
+	return 0, w.err
+}
+
+func (w *errorResponseWriter) WriteHeader(statusCode int) {
+	w.statusCode = statusCode
 }
