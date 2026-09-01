@@ -67,10 +67,12 @@ func TestNewLocalAssetUploader(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := NewLocalAssetUploader(
-				tempDirPath,
-				tempDirPath,
-				test.urlPrefix,
-				test.maxUploadSize,
+				localAssetUploaderConfig{
+					tempDirPath,
+					tempDirPath,
+					test.urlPrefix,
+					test.maxUploadSize,
+				},
 			)
 			if test.expectedErr != nil && !errors.Is(err, test.expectedErr) {
 				t.Fatalf("got %v, want %v", err, test.expectedErr)
@@ -377,10 +379,12 @@ func TestLocalAssetUploader_ServeHTTP(t *testing.T) {
 			outputDir := t.TempDir()
 
 			uploader, err := NewLocalAssetUploader(
-				tmpDir,
-				outputDir,
-				urlPrefix,
-				int64(maxUploadSize),
+				localAssetUploaderConfig{
+					tmpDir,
+					outputDir,
+					urlPrefix,
+					int64(maxUploadSize),
+				},
 			)
 			if err != nil {
 				t.Fatalf("LocalAssetUploader: %v", err)

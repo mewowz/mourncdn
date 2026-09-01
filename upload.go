@@ -28,6 +28,13 @@ type LocalAssetUploader struct {
 	maxAssetUploadSize int64
 }
 
+type localAssetUploaderConfig struct {
+	TmpDirPath         string
+	OutputDirPath      string
+	URLPrefix          string
+	MaxAssetUploadSize int64
+}
+
 type assetMeta struct {
 	Hash     hash.Hash
 	MimeInfo *mimetype.MIME
@@ -36,38 +43,35 @@ type assetMeta struct {
 }
 
 func NewLocalAssetUploader(
-	tmpDirPath,
-	outputDirPath,
-	urlPrefix string,
-	maxAssetUploadSize int64,
+	cfg localAssetUploaderConfig,
 ) (*LocalAssetUploader, error) {
-	if err := checkDirRW(tmpDirPath); err != nil {
-		return nil, fmt.Errorf("check RW on %q: %w", tmpDirPath, err)
+	if err := checkDirRW(cfg.TmpDirPath); err != nil {
+		return nil, fmt.Errorf("check RW on %q: %w", cfg.TmpDirPath, err)
 	}
-	if err := checkDirRW(outputDirPath); err != nil {
-		return nil, fmt.Errorf("check RW on %q: %w", outputDirPath, err)
+	if err := checkDirRW(cfg.OutputDirPath); err != nil {
+		return nil, fmt.Errorf("check RW on %q: %w", cfg.OutputDirPath, err)
 	}
 
 	// maxAssetSize = 0 essentially disables uploading
-	if maxAssetUploadSize < 0 {
+	if cfg.MaxAssetUploadSize < 0 {
 		return nil, ErrInvalidAssetSizeLimit
 	}
 
-	if !strings.HasPrefix(urlPrefix, "/") {
-		return nil, fmt.Errorf("URL prefix %q must start with /", urlPrefix)
+	if !strings.HasPrefix(cfg.URLPrefix, "/") {
+		return nil, fmt.Errorf("URL prefix %q must start with /", cfg.URLPrefix)
 	}
-	if strings.ContainsAny(urlPrefix, "?#") {
+	if strings.ContainsAny(cfg.URLPrefix, "?#") {
 		return nil, fmt.Errorf(
 			"URL prefix %q must not contain any query or fragment",
-			urlPrefix,
+			cfg.URLPrefix,
 		)
 	}
 
 	return &LocalAssetUploader{
-		tmpDirPath:         tmpDirPath,
-		outputDirPath:      outputDirPath,
-		urlPrefix:          urlPrefix,
-		maxAssetUploadSize: maxAssetUploadSize,
+		tmpDirPath:         cfg.TmpDirPath,
+		outputDirPath:      cfg.OutputDirPath,
+		urlPrefix:          cfg.URLPrefix,
+		maxAssetUploadSize: cfg.MaxAssetUploadSize,
 	}, nil
 }
 
