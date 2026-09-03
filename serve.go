@@ -26,14 +26,14 @@ type LocalAssetServer struct {
 
 type localAssetServerConfig struct {
 	// LocalAssetCache
-	AssetDir     string
-	AssetMaxSize int64
-	CacheMaxSize int64
-	TTL          time.Duration
+	AssetDir     string        `koanf:"asset-dir"`
+	AssetMaxSize int64         `koanf:"max-cacheable-size"`
+	CacheMaxSize int64         `koanf:"cache-size"`
+	TTL          time.Duration `koanf:"asset-ttl"`
 
 	// LocalAssetServer
-	WriteBufSize int
-	WriteWindow  time.Duration
+	WriteBufSize int           `koanf:"advanced.write-buffer-size"`
+	WriteWindow  time.Duration `koanf:"advanced.write-window"`
 }
 
 func NewLocalAssetServer(

@@ -1,0 +1,149 @@
+package main
+
+import (
+	"os"
+	"path/filepath"
+	"reflect"
+	"testing"
+	"time"
+
+	"github.com/google/go-cmp/cmp"
+)
+
+func TestLoadConfigFile(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.yml")
+
+	configData := []byte(`
+cdn:
+  serve-route: /assets
+  upload-route: /upload
+  address: localhost:9743
+  advanced:
+    read-timeout: 15s
+    read-header-timeout: 3s
+    write-timeout: 15s
+    idle-timeout: 60s
+
+serve:
+  asset-dir: ./data/assets
+  max-cacheable-size: 100MiB
+  cache-size: 1GiB
+  asset-ttl: 60s
+  advanced:
+    write-buffer-size: 4096
+    write-window: 10s
+
+upload:
+  temp-dir: ./data/tmp
+  output-dir: ./data/assets
+  url-prefix: /assets
+  max-upload-size: 2GiB
+`)
+
+	if err := os.WriteFile(configPath, configData, 0o777); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := LoadConfigFile(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfigFile() error = %v", err)
+	}
+
+	want := &Config{
+		ServeCfg: localAssetServerConfig{
+			AssetDir:     "./data/assets",
+			AssetMaxSize: 100 * 1024 * 1024,
+			CacheMaxSize: 1024 * 1024 * 1024,
+			TTL:          60 * time.Second,
+			WriteBufSize: 4096,
+			WriteWindow:  10 * time.Second,
+		},
+		UploadCfg: localAssetUploaderConfig{
+			TmpDirPath:         "./data/tmp",
+			OutputDirPath:      "./data/assets",
+			URLPrefix:          "/assets",
+			MaxAssetUploadSize: 2 * 1024 * 1024 * 1024,
+		},
+		HTTPCfg: CDNServerConfig{
+			ServeRoute:        "/assets",
+			UploadRoute:       "/upload",
+			Address:           "localhost:9743",
+			ReadTimeout:       15 * time.Second,
+			ReadHeaderTimeout: 3 * time.Second,
+			WriteTimeout:      15 * time.Second,
+			IdleTimeout:       60 * time.Second,
+		},
+	}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("LoadConfigFile() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestByteSizeHook(t *testing.T) {
+	tests := []struct {
+		name         string
+		from         reflect.Type
+		to           reflect.Type
+		data         any
+		expectedType reflect.Kind
+		expectedVal  any
+	}{
+		{
+			name:         "string to int64",
+			from:         reflect.TypeOf(""),
+			to:           reflect.TypeOf(int64(0)),
+			data:         "0",
+			expectedType: reflect.Int64,
+			expectedVal:  int64(0),
+		},
+		{
+			name:         "string to int",
+			from:         reflect.TypeOf(""),
+			to:           reflect.TypeOf(int(3)),
+			expectedType: reflect.Int,
+			data:         "3",
+			expectedVal:  int(3),
+		},
+		{
+			name:         "float64 to int64",
+			from:         reflect.TypeOf(float64(3.14159)),
+			to:           reflect.TypeOf(int64(0)),
+			data:         float64(3.14159),
+			expectedType: reflect.Float64,
+			expectedVal:  float64(3.14159),
+		},
+		{
+			name:         "string to string",
+			from:         reflect.TypeOf(""),
+			to:           reflect.TypeOf(""),
+			data:         "44",
+			expectedType: reflect.String,
+			expectedVal:  "44",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			v, err := byteSizeHookFunc(
+				test.from,
+				test.to,
+				test.data,
+			)
+			if err != nil {
+				t.Fatalf("error = %v, want nil", err)
+			}
+			if kind := reflect.TypeOf(v).Kind(); kind != test.expectedType {
+				t.Fatalf(
+					"got TypeOf(v).Kind() = %v, want %v",
+					kind,
+					test.expectedType,
+				)
+			}
+
+			if v != test.expectedVal {
+				t.Fatalf("got v=%v, want %v", v, test.expectedVal)
+			}
+		})
+	}
+}

@@ -29,10 +29,10 @@ type LocalAssetUploader struct {
 }
 
 type localAssetUploaderConfig struct {
-	TmpDirPath         string
-	OutputDirPath      string
-	URLPrefix          string
-	MaxAssetUploadSize int64
+	TmpDirPath         string `koanf:"temp-dir"`
+	OutputDirPath      string `koanf:"output-dir"`
+	URLPrefix          string `koanf:"url-prefix"`
+	MaxAssetUploadSize int64  `koanf:"max-upload-size"`
 }
 
 type assetMeta struct {

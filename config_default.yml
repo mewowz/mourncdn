@@ -1,0 +1,24 @@
+cdn:
+  serve-route: /assets
+  upload-route: /upload
+  address: localhost:9743
+  advanced:
+    read-timeout: 15s
+    read-header-timeout: 3s
+    write-timeout: 15s
+    idle-timeout: 60s
+
+serve:
+  asset-dir: ./data/assets
+  max-cacheable-size: 100MiB
+  cache-size: 1GiB
+  asset-ttl: 60s
+  advanced:
+    write-buffer-size: 4096
+    write-window: 10s
+
+upload:
+  temp-dir: ./data/tmp
+  output-dir: ./data/assets
+  url-prefix: /assets
+  max-upload-size: 2GiB

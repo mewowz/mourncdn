@@ -17,14 +17,14 @@ type CDNServer struct {
 }
 
 type CDNServerConfig struct {
-	ServeRoute  string
-	UploadRoute string
+	ServeRoute  string `koanf:"serve-route"`
+	UploadRoute string `koanf:"upload-route"`
 
-	Address           string
-	ReadTimeout       time.Duration
-	ReadHeaderTimeout time.Duration
-	WriteTimeout      time.Duration
-	IdleTimeout       time.Duration
+	Address           string        `koanf:"address"`
+	ReadTimeout       time.Duration `koanf:"advanced.read-timeout"`
+	ReadHeaderTimeout time.Duration `koanf:"advanced.read-header-timeout"`
+	WriteTimeout      time.Duration `koanf:"advanced.write-timeout"`
+	IdleTimeout       time.Duration `koanf:"advanced.idle-timeout"`
 }
 
 func NewCDNServer(
