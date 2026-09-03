@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -261,9 +262,9 @@ func (c *LocalAssetCache) Cache(fileName string) error {
 	freeSpace := c.cacheMaxSize - c.cacheSize
 	if assetSize > freeSpace {
 		bytesNeeded := assetSize - freeSpace
-		victim := c.findEvictionCandidateLocked(bytesNeeded, time.Now())
+		victims := c.findEvictionCandidatesLocked(bytesNeeded, time.Now())
 
-		if victim == nil {
+		if victims == nil {
 			return fmt.Errorf(
 				"cache %q (assetSize+cacheSize=%d > cacheMaxSize=%d): %w",
 				fileName,
@@ -273,7 +274,9 @@ func (c *LocalAssetCache) Cache(fileName string) error {
 			)
 		}
 
-		c.uncacheAssetLocked(victim)
+		for _, victim := range victims {
+			c.uncacheAssetLocked(victim)
+		}
 	}
 
 	err = asset.cache(time.Now().Add(c.ttl))
@@ -296,12 +299,11 @@ func (c *LocalAssetCache) uncacheAssetLocked(asset *LocalAsset) {
 	c.cacheSize -= assetSize
 }
 
-func (c *LocalAssetCache) findEvictionCandidateLocked(
+func (c *LocalAssetCache) findEvictionCandidatesLocked(
 	bytesNeeded int64,
 	now time.Time,
-) *LocalAsset {
-	var victim *LocalAsset
-	var oldestExpiry time.Time
+) []*LocalAsset {
+	var candidates []*LocalAsset
 	for _, candidate := range c.assets {
 		state := candidate.cacheState()
 		if !state.Cached {
@@ -312,18 +314,29 @@ func (c *LocalAssetCache) findEvictionCandidateLocked(
 			continue
 		}
 
-		candidateSize := candidate.FileInfo.Size()
-		if candidateSize < bytesNeeded {
-			continue
-		}
+		candidates = append(candidates, candidate)
+	}
+	if candidates == nil {
+		return nil
+	}
 
-		if victim == nil || state.ExpiresAt.Before(oldestExpiry) {
-			victim = candidate
-			oldestExpiry = state.ExpiresAt
+	slices.SortFunc(candidates, func(a, b *LocalAsset) int {
+		aState := a.cacheState()
+		bState := b.cacheState()
+		return aState.ExpiresAt.Compare(bState.ExpiresAt)
+	})
+
+	var victims []*LocalAsset
+	var totalVictimBytes int64
+	for _, victim := range candidates {
+		totalVictimBytes += victim.FileInfo.Size()
+		victims = append(victims, victim)
+		if totalVictimBytes >= bytesNeeded {
+			return victims
 		}
 	}
 
-	return victim
+	return nil
 }
 
 func validateAssetName(name string) error {

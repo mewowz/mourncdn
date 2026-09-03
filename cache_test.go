@@ -480,129 +480,131 @@ func TestLocalAssetCache_Fetch(t *testing.T) {
 	}
 }
 
-func TestLocalAssetCache_findEvictionCandidateLocked(t *testing.T) {
-	nowTime := time.Now()
-	cacheExpiryBase := nowTime.Add(10 * time.Second)
+func TestLocalAssetCache_findEvictionCandidatesLocked(t *testing.T) {
+	now := time.Now()
 
-	type assetMeta struct {
-		name  string
-		asset *LocalAsset
+	oldest := &LocalAsset{
+		FileInfo:    &MockFileInfo{size: 1},
+		cachedBytes: []byte{0x00},
+		expiresAt:   now.Add(-30 * time.Second),
 	}
-	assets := struct {
-		newest assetMeta
-		middle assetMeta
-		oldest assetMeta
-	}{
-		assetMeta{
-			"abcd.jpg",
-			&LocalAsset{
-				FileInfo:    &MockFileInfo{size: 2},
-				cachedBytes: []byte{0x00, 0x01},
-				expiresAt:   cacheExpiryBase,
-			},
-		},
-		assetMeta{
-			"bcdf.png",
-			&LocalAsset{
-				FileInfo:    &MockFileInfo{size: 1},
-				cachedBytes: []byte{0x00},
-				expiresAt: cacheExpiryBase.Add(
-					time.Second * -1,
-				),
-			},
-		},
-		assetMeta{
-			"cdef.jpg",
-			&LocalAsset{
-				FileInfo:    &MockFileInfo{size: 1},
-				cachedBytes: []byte{0x00},
-				expiresAt: cacheExpiryBase.Add(
-					time.Second * -20,
-				),
-			},
-		},
+	middle := &LocalAsset{
+		FileInfo:    &MockFileInfo{size: 2},
+		cachedBytes: []byte{0x00, 0x01},
+		expiresAt:   now.Add(-20 * time.Second),
+	}
+	newest := &LocalAsset{
+		FileInfo:    &MockFileInfo{size: 4},
+		cachedBytes: []byte{0x00, 0x01, 0x02, 0x03},
+		expiresAt:   now.Add(-10 * time.Second),
+	}
+	unexpired := &LocalAsset{
+		FileInfo:    &MockFileInfo{size: 100},
+		cachedBytes: []byte{0x00},
+		expiresAt:   now.Add(10 * time.Second),
+	}
+	uncached := &LocalAsset{
+		FileInfo: &MockFileInfo{size: 100},
 	}
 
-	assetsEmpty := make(map[string]*LocalAsset)
-	assetsSingle := map[string]*LocalAsset{
-		assets.newest.name: assets.newest.asset,
-	}
-	assetsTwo := map[string]*LocalAsset{
-		assets.newest.name: assets.newest.asset,
-		assets.middle.name: assets.middle.asset,
-	}
-	assetsMany := map[string]*LocalAsset{
-		assets.newest.name: assets.newest.asset,
-		assets.middle.name: assets.middle.asset,
-		assets.oldest.name: assets.oldest.asset,
+	allAssets := map[string]*LocalAsset{
+		"oldest":    oldest,
+		"middle":    middle,
+		"newest":    newest,
+		"unexpired": unexpired,
+		"uncached":  uncached,
 	}
 
 	tests := []struct {
-		name          string
-		assets        map[string]*LocalAsset
-		bytesNeeded   int64
-		expectedAsset *LocalAsset
+		name            string
+		assets          map[string]*LocalAsset
+		bytesNeeded     int64
+		expectedVictims []*LocalAsset
 	}{
 		{
-			"empty assets map returns nil",
-			assetsEmpty,
-			1,
-			nil,
+			name:            "empty assets map returns nil",
+			assets:          map[string]*LocalAsset{},
+			bytesNeeded:     1,
+			expectedVictims: nil,
 		},
 		{
-			"assets map of length 1 with expired asset returns asset",
-			map[string]*LocalAsset{
-				assets.oldest.name: assets.oldest.asset,
+			name: "no expired cached assets returns nil",
+			assets: map[string]*LocalAsset{
+				"unexpired": unexpired,
+				"uncached":  uncached,
 			},
-			1,
-			assets.oldest.asset,
+			bytesNeeded:     1,
+			expectedVictims: nil,
 		},
 		{
-			"assets map of length 1 with unexpired asset returns nil",
-			map[string]*LocalAsset{
-				assets.newest.name: assets.newest.asset,
+			name: "single expired asset satisfies required space",
+			assets: map[string]*LocalAsset{
+				"oldest": oldest,
 			},
-			1,
-			nil,
-		},
-
-		{
-			"candidate smaller than bytesNeeded reutrns nil",
-			assetsSingle,
-			4,
-			nil,
+			bytesNeeded:     1,
+			expectedVictims: []*LocalAsset{oldest},
 		},
 		{
-			"two candidates not expired returns nil",
-			assetsTwo,
-			1,
-			nil,
+			name:            "oldest asset chosen first",
+			assets:          allAssets,
+			bytesNeeded:     1,
+			expectedVictims: []*LocalAsset{oldest},
 		},
 		{
-			"two candidates both smaller than bytesNeeded returns nil",
-			assetsTwo,
-			100,
-			nil,
+			name:        "multiple victims selected oldest to newest",
+			assets:      allAssets,
+			bytesNeeded: 3,
+			expectedVictims: []*LocalAsset{
+				oldest,
+				middle,
+			},
 		},
 		{
-			"three candidates picks oldest",
-			assetsMany,
-			1,
-			assetsMany[assets.oldest.name],
+			name:        "continues selecting until enough bytes accumulated",
+			assets:      allAssets,
+			bytesNeeded: 6,
+			expectedVictims: []*LocalAsset{
+				oldest,
+				middle,
+				newest,
+			},
+		},
+		{
+			name:            "insufficient expired bytes returns nil",
+			assets:          allAssets,
+			bytesNeeded:     8,
+			expectedVictims: nil,
 		},
 	}
 
 	for _, test := range tests {
-		cache := &LocalAssetCache{
-			assets: test.assets,
-		}
 		t.Run(test.name, func(t *testing.T) {
-			gotVictim := cache.findEvictionCandidateLocked(
+			cache := &LocalAssetCache{
+				assets: test.assets,
+			}
+
+			got := cache.findEvictionCandidatesLocked(
 				test.bytesNeeded,
-				nowTime,
+				now,
 			)
-			if gotVictim != test.expectedAsset {
-				t.Errorf("got %v, want %v", gotVictim, test.expectedAsset)
+
+			if len(got) != len(test.expectedVictims) {
+				t.Fatalf(
+					"got %d victims, want %d",
+					len(got),
+					len(test.expectedVictims),
+				)
+			}
+
+			for i := range test.expectedVictims {
+				if got[i] != test.expectedVictims[i] {
+					t.Errorf(
+						"victim[%d]=%p, want %p",
+						i,
+						got[i],
+						test.expectedVictims[i],
+					)
+				}
 			}
 		})
 	}
