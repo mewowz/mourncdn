@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -47,8 +48,8 @@ func NewCDNServer(
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle(cdnCfg.ServeRoute, serveHandler)
-	mux.Handle(cdnCfg.UploadRoute, HTTPAuthenticator(uploadHandler))
+	mux.Handle(fmt.Sprintf("GET %s/{id...}", cdnCfg.ServeRoute), serveHandler)
+	mux.Handle(fmt.Sprintf("POST %s", cdnCfg.UploadRoute), HTTPAuthenticator(uploadHandler))
 
 	server := &http.Server{
 		Addr:              cdnCfg.Address,
