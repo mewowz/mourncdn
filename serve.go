@@ -1,8 +1,8 @@
 package main
 
 import (
+	"context"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -47,7 +47,7 @@ func NewLocalAssetServer(
 		cfg.TTL,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("local asset server: %w", err)
+		return nil, err
 	}
 
 	if logger == nil {
@@ -55,19 +55,11 @@ func NewLocalAssetServer(
 	}
 
 	if cfg.WriteBufSize <= 0 {
-		return nil, fmt.Errorf(
-			"local asset server WriteBufSize=%d: %w",
-			cfg.WriteBufSize,
-			ErrInvalidWriteBufSize,
-		)
+		return nil, ErrInvalidWriteBufSize
 	}
 
 	if cfg.WriteWindow <= 0 {
-		return nil, fmt.Errorf(
-			"local asset server WriteWindow=%d: %w",
-			cfg.WriteWindow,
-			ErrInvalidWriteWindow,
-		)
+		return nil, ErrInvalidWriteWindow
 	}
 
 	return &LocalAssetServer{
@@ -94,8 +86,42 @@ func (s *LocalAssetServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	err = s.writeAssetToClient(asset, w, r)
 	if err != nil {
+		s.handleWriteAssetToClientError(r, err)
 		return
 	}
+}
+
+func (s *LocalAssetServer) handleWriteAssetToClientError(
+	r *http.Request,
+	err error,
+) {
+	writeErrorLogger := s.logger.With(
+		"err", err.Error(),
+		"method", r.Method,
+		"remote", r.RemoteAddr,
+		"url", r.URL.String(),
+	)
+
+	var pe *os.PathError
+	if errors.As(err, &pe) {
+		writeErrorLogger.Error("path error")
+		return
+	}
+
+	if errors.Is(err, context.DeadlineExceeded) {
+		writeErrorLogger.Warn(
+			"deadline exceeded",
+			"note", "request deadline exceeded",
+		)
+		return
+	}
+
+	if errors.Is(err, context.Canceled) {
+		writeErrorLogger.Debug("request context cancelled")
+		return
+	}
+
+	writeErrorLogger.Error("failed to serve asset")
 }
 
 func (s *LocalAssetServer) handleCacheAndFetchErr(
@@ -170,7 +196,10 @@ func (s *LocalAssetServer) writeAssetToClient(
 		}
 		n, err := assetReader.Read(buf)
 
-		_ = rc.SetWriteDeadline(time.Now().Add(s.writeWindow))
+		deadlineErr := rc.SetWriteDeadline(time.Now().Add(s.writeWindow))
+		if deadlineErr != nil {
+			return deadlineErr
+		}
 		if n > 0 {
 			_, writeErr := w.Write(buf[:n])
 			if writeErr != nil {
