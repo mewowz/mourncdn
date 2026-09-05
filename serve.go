@@ -80,23 +80,25 @@ func (s *LocalAssetServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	assetID := r.PathValue("id")
 	asset, err := s.cacheAndFetch(assetID)
 	if err != nil {
-		s.handleCacheAndFetchErr(err, w)
+		s.handleCacheAndFetchErr(err, assetID, w, r)
 		return
 	}
 
 	err = s.writeAssetToClient(asset, w, r)
 	if err != nil {
-		s.handleWriteAssetToClientError(r, err)
+		s.handleWriteAssetToClientError(assetID, r, err)
 		return
 	}
 }
 
 func (s *LocalAssetServer) handleWriteAssetToClientError(
+	assetID string,
 	r *http.Request,
 	err error,
 ) {
 	writeErrorLogger := s.logger.With(
 		"err", err.Error(),
+		"assetID", assetID,
 		"method", r.Method,
 		"remote", r.RemoteAddr,
 		"url", r.URL.String(),
@@ -126,8 +128,18 @@ func (s *LocalAssetServer) handleWriteAssetToClientError(
 
 func (s *LocalAssetServer) handleCacheAndFetchErr(
 	err error,
+	assetID string,
 	w http.ResponseWriter,
+	r *http.Request,
 ) {
+	writeErrorLogger := s.logger.With(
+		"err", err.Error(),
+		"assetID", assetID,
+		"method", r.Method,
+		"remote", r.RemoteAddr,
+		"url", r.URL.String(),
+	)
+
 	w.Header().Set("Cache-Control", "no-store")
 	switch {
 	case errors.Is(err, ErrInvalidAssetName):
@@ -138,6 +150,7 @@ func (s *LocalAssetServer) handleCacheAndFetchErr(
 		http.Error(w, "not found", http.StatusNotFound)
 	default:
 		http.Error(w, "server error", http.StatusInternalServerError)
+		writeErrorLogger.Error("failed to fetch asset")
 	}
 }
 
@@ -187,6 +200,7 @@ func (s *LocalAssetServer) writeAssetToClient(
 
 	rc := http.NewResponseController(w)
 
+	deadlineUnsupportedLogged := false
 	buf := make([]byte, s.writeBufSize)
 	for {
 		select {
@@ -197,8 +211,9 @@ func (s *LocalAssetServer) writeAssetToClient(
 		n, err := assetReader.Read(buf)
 
 		deadlineErr := rc.SetWriteDeadline(time.Now().Add(s.writeWindow))
-		if deadlineErr != nil {
-			return deadlineErr
+		if errors.Is(deadlineErr, http.ErrNotSupported) && deadlineUnsupportedLogged == false {
+			deadlineUnsupportedLogged = true
+			s.logger.Debug("deadline", "err", deadlineErr)
 		}
 		if n > 0 {
 			_, writeErr := w.Write(buf[:n])

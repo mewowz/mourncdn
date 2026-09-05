@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
@@ -112,6 +113,7 @@ func TestNewLocalAssetServer(t *testing.T) {
 			want := &LocalAssetServer{
 				writeBufSize: test.cfg.WriteBufSize,
 				writeWindow:  test.cfg.WriteWindow,
+				logger:       slog.New(slog.DiscardHandler),
 			}
 
 			diff := cmp.Diff(
@@ -350,6 +352,7 @@ func TestLocalAssetServer_writeAssetToClient(t *testing.T) {
 			server := &LocalAssetServer{
 				writeBufSize: 3,
 				writeWindow:  time.Second,
+				logger:       slog.New(slog.DiscardHandler),
 			}
 
 			req := httptest.NewRequest(
@@ -427,13 +430,21 @@ func TestLocalAssetServer_handleCachAndFetchErr(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assetServer := &LocalAssetServer{}
+			assetServer := &LocalAssetServer{
+				logger: slog.New(slog.DiscardHandler),
+			}
 			writer := &errorResponseWriter{
 				header: make(http.Header),
 			}
+			request := &http.Request{
+				URL: &url.URL{},
+			}
+			assetID := "abcd.jpg"
 			assetServer.handleCacheAndFetchErr(
 				test.err,
+				assetID,
 				writer,
+				request,
 			)
 			if writer.statusCode != test.expectedStatus {
 				t.Fatalf(
