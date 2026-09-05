@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path"
@@ -26,6 +27,8 @@ type LocalAssetUploader struct {
 	urlPrefix string
 
 	maxAssetUploadSize int64
+
+	logger *slog.Logger
 }
 
 type localAssetUploaderConfig struct {
@@ -44,7 +47,11 @@ type assetMeta struct {
 
 func NewLocalAssetUploader(
 	cfg localAssetUploaderConfig,
+	logger *slog.Logger,
 ) (*LocalAssetUploader, error) {
+	if logger == nil {
+		logger = slog.Default()
+	}
 	if err := checkDirRW(cfg.TmpDirPath); err != nil {
 		return nil, fmt.Errorf("check RW on %q: %w", cfg.TmpDirPath, err)
 	}
@@ -72,6 +79,7 @@ func NewLocalAssetUploader(
 		outputDirPath:      cfg.OutputDirPath,
 		urlPrefix:          cfg.URLPrefix,
 		maxAssetUploadSize: cfg.MaxAssetUploadSize,
+		logger:             logger,
 	}, nil
 }
 
@@ -84,7 +92,7 @@ func (u *LocalAssetUploader) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	outFilePath, err := u.handleAssetUpload(w, r)
 	if err != nil {
-		u.handleAssetUploadErr(err, w)
+		u.handleAssetUploadErr(err, w, r)
 		return
 	}
 
@@ -99,7 +107,12 @@ func (u *LocalAssetUploader) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		),
 	})
 	if err != nil {
-		// log
+		u.logger.Error(
+			"failed to write upload response",
+			"err", err,
+			"remote", r.RemoteAddr,
+			"assetpath", outFilePath,
+		)
 		return
 	}
 }
@@ -107,13 +120,21 @@ func (u *LocalAssetUploader) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (u *LocalAssetUploader) handleAssetUploadErr(
 	err error,
 	w http.ResponseWriter,
+	r *http.Request,
 ) {
+	writeErrorLogger := u.logger.With(
+		"err", err.Error(),
+		"method", r.Method,
+		"remote", r.RemoteAddr,
+		"url", r.URL.String(),
+	)
 	var maxErr *http.MaxBytesError
 	switch {
 	case errors.As(err, &maxErr):
 		http.Error(w, "file too large", http.StatusRequestEntityTooLarge)
 	default:
 		http.Error(w, "server error", http.StatusInternalServerError)
+		writeErrorLogger.Error("failed to upload asset")
 	}
 }
 

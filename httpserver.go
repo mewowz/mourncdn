@@ -42,7 +42,7 @@ func NewCDNServer(
 		return nil, err
 	}
 
-	uploadHandler, err := NewLocalAssetUploader(uploadCfg)
+	uploadHandler, err := NewLocalAssetUploader(uploadCfg, logger)
 	if err != nil {
 		return nil, err
 	}

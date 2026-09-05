@@ -7,8 +7,10 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -73,6 +75,7 @@ func TestNewLocalAssetUploader(t *testing.T) {
 					test.urlPrefix,
 					test.maxUploadSize,
 				},
+				slog.New(slog.DiscardHandler),
 			)
 			if test.expectedErr != nil && !errors.Is(err, test.expectedErr) {
 				t.Fatalf("got %v, want %v", err, test.expectedErr)
@@ -109,13 +112,19 @@ func TestLocalAssetUploader_handleAssetUploadErr(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			u := &LocalAssetUploader{}
+			u := &LocalAssetUploader{
+				logger: slog.New(slog.DiscardHandler),
+			}
 			writer := &errorResponseWriter{
 				header: make(http.Header),
+			}
+			request := &http.Request{
+				URL: &url.URL{},
 			}
 			u.handleAssetUploadErr(
 				test.err,
 				writer,
+				request,
 			)
 
 			if writer.statusCode != test.expectedStatus {
@@ -385,6 +394,7 @@ func TestLocalAssetUploader_ServeHTTP(t *testing.T) {
 					urlPrefix,
 					int64(maxUploadSize),
 				},
+				slog.New(slog.DiscardHandler),
 			)
 			if err != nil {
 				t.Fatalf("LocalAssetUploader: %v", err)
