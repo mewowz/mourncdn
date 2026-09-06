@@ -25,9 +25,9 @@ func defaultKoanfConfig() (*koanf.Koanf, error) {
 		"cdn.serve-route":                  "/assets",
 		"cdn.upload-route":                 "/upload",
 		"cdn.address":                      "localhost:9743",
-		"cdn.advanced.read-timeout":        "15s",
+		"cdn.advanced.read-timeout":        "0s",
 		"cdn.advanced.read-header-timeout": "3s",
-		"cdn.advanced.write-timeout":       "15s",
+		"cdn.advanced.write-timeout":       "0s",
 		"cdn.advanced.idle-timeout":        "60s",
 
 		"serve.asset-dir":                  "./data/assets",
