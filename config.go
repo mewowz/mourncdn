@@ -24,7 +24,7 @@ func defaultKoanfConfig() (*koanf.Koanf, error) {
 	defaults := map[string]any{
 		"cdn.serve-route":                  "/assets",
 		"cdn.upload-route":                 "/upload",
-		"cdn.address":                      "localhost:9743",
+		"cdn.address":                      "0.0.0.0:9743",
 		"cdn.advanced.read-timeout":        "0s",
 		"cdn.advanced.read-header-timeout": "3s",
 		"cdn.advanced.write-timeout":       "0s",
