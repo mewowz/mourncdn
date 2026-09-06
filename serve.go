@@ -166,10 +166,6 @@ func (s *LocalAssetServer) cacheAndFetch(
 	if err != nil {
 		for _, rErr := range recoverableErrors {
 			if errors.Is(err, rErr) {
-				// Really want to figure out a right way to
-				// log these without cluttering my methods with logs
-				// everywhere.
-				// s.logErrorWithRequest(err, r)
 				err = nil
 				break
 			}
