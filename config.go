@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"reflect"
 
 	"github.com/dustin/go-humanize"
@@ -53,11 +54,11 @@ func defaultKoanfConfig() (*koanf.Koanf, error) {
 func LoadConfigFile(path string) (*Config, error) {
 	k, err := defaultKoanfConfig()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("default config: %w", err)
 	}
 	f := file.Provider(path)
 	if err := k.Load(f, yaml.Parser()); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("config file %q: %w", path, err)
 	}
 
 	dc := mapstructure.DecoderConfig{
@@ -74,17 +75,17 @@ func LoadConfigFile(path string) (*Config, error) {
 
 	var serveCfg localAssetServerConfig
 	if err := k.UnmarshalWithConf("serve", &serveCfg, uc); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("serve config: %w", err)
 	}
 
 	var uploadCfg localAssetUploaderConfig
 	if err := k.UnmarshalWithConf("upload", &uploadCfg, uc); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("upload config: %w", err)
 	}
 
 	var cdnCfg CDNServerConfig
 	if err := k.UnmarshalWithConf("cdn", &cdnCfg, uc); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cdn config: %w", err)
 	}
 
 	return &Config{
