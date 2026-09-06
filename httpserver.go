@@ -39,12 +39,12 @@ func NewCDNServer(
 	}
 	serveHandler, err := NewLocalAssetServer(serveCfg, logger)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("initialze asset server: %w", err)
 	}
 
 	uploadHandler, err := NewLocalAssetUploader(uploadCfg, logger)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("initialze upload server: %w", err)
 	}
 
 	mux := http.NewServeMux()
