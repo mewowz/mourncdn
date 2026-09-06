@@ -185,7 +185,7 @@ func (u *LocalAssetUploader) writeAssetUploadToDisk(
 	)
 	if err != nil {
 		_ = outFile.Close()
-		return assetMeta{}, err
+		return assetMeta{}, fmt.Errorf("copy upload to tempfile: %w", err)
 	}
 
 	if err = outFile.Close(); err != nil {
@@ -194,7 +194,7 @@ func (u *LocalAssetUploader) writeAssetUploadToDisk(
 
 	mime, err := mimetype.DetectFile(outFilePath)
 	if err != nil {
-		return assetMeta{}, err
+		return assetMeta{}, fmt.Errorf("detect uploaded file MIME type: %w", err)
 	}
 
 	meta := assetMeta{
