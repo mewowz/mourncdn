@@ -347,7 +347,7 @@ func TestLocalAssetUploader_ServeHTTP(t *testing.T) {
 	target := "localhost:8983/upload"
 
 	type statusCreatedResponse struct {
-		AssetPath string `json:"assetpath"`
+		AssetPath string `json:"asset_path"`
 	}
 
 	maxUploadSize := 10

@@ -100,7 +100,7 @@ func (u *LocalAssetUploader) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 
 	err = json.NewEncoder(w).Encode(struct {
-		AssetPath string
+		AssetPath string `json:"asset_path"`
 	}{
 		AssetPath: path.Join(
 			u.urlPrefix, path.Base(outFilePath),
