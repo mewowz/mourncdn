@@ -39,6 +39,7 @@ func run(logger *slog.Logger) error {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 
+	logger.Info("starting server", "address", config.HTTPCfg.Address)
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- server.Start()

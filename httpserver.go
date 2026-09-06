@@ -68,13 +68,11 @@ func NewCDNServer(
 }
 
 func (s *CDNServer) ShutdownGracefully(ctx context.Context) error {
-	s.logger.Info("gracefully shutting down server")
 	err := s.server.Shutdown(ctx)
 	if err != nil {
 		return err
 	}
 
-	s.logger.Info("server successfully shutdown")
 	return nil
 }
 
