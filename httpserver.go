@@ -81,7 +81,7 @@ func (s *CDNServer) ShutdownGracefully(ctx context.Context) error {
 func (s *CDNServer) ForceCloseServer() error {
 	err := s.server.Close()
 	if err != nil {
-		return fmt.Errorf("force close server", err)
+		return fmt.Errorf("force close server: %w", err)
 	}
 	return nil
 }
