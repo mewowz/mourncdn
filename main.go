@@ -25,10 +25,26 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
+	tokenStore, err := NewTokenStore(
+		config.TokenStoreCfg,
+		logger,
+	)
+	if err != nil {
+		logger.Error("token store", "err", err)
+		return err
+	}
+	defer func() {
+		if err = tokenStore.Close(); err != nil {
+			logger.Error("token store", "err", err)
+		}
+	}()
+
 	server, err := NewCDNServer(
 		config.ServeCfg,
 		config.UploadCfg,
 		config.HTTPCfg,
+		config.AuthCfg,
+		tokenStore,
 		logger,
 	)
 	if err != nil {
