@@ -15,9 +15,11 @@ import (
 const DefaultConfigPath = "./config.yml"
 
 type Config struct {
-	ServeCfg  localAssetServerConfig
-	UploadCfg localAssetUploaderConfig
-	HTTPCfg   CDNServerConfig
+	ServeCfg      localAssetServerConfig
+	UploadCfg     localAssetUploaderConfig
+	HTTPCfg       CDNServerConfig
+	AuthCfg       authMiddleConfig
+	TokenStoreCfg tokenStoreConfig
 }
 
 func defaultKoanfConfig() (*koanf.Koanf, error) {
@@ -41,6 +43,12 @@ func defaultKoanfConfig() (*koanf.Koanf, error) {
 		"upload.output-dir":      "./data/assets",
 		"upload.url-prefix":      "/assets",
 		"upload.max-upload-size": "2GiB",
+
+		"auth.public-key": "",
+
+		"token-store.dbdriver":               "sqlite",
+		"token-store.dbpath":                 "./data/ts.sql",
+		"token-store.advanced.db-op-timeout": "3s",
 	}
 
 	k := koanf.New(".")
@@ -88,10 +96,22 @@ func LoadConfigFile(path string) (*Config, error) {
 		return nil, fmt.Errorf("cdn config: %w", err)
 	}
 
+	var authCfg authMiddleConfig
+	if err := k.UnmarshalWithConf("auth", &authCfg, uc); err != nil {
+		return nil, fmt.Errorf("auth config: %w", err)
+	}
+
+	var tokenStoreCfg tokenStoreConfig
+	if err := k.UnmarshalWithConf("token-store", &tokenStoreCfg, uc); err != nil {
+		return nil, fmt.Errorf("token config: %w", err)
+	}
+
 	return &Config{
-		ServeCfg:  serveCfg,
-		UploadCfg: uploadCfg,
-		HTTPCfg:   cdnCfg,
+		ServeCfg:      serveCfg,
+		UploadCfg:     uploadCfg,
+		HTTPCfg:       cdnCfg,
+		AuthCfg:       authCfg,
+		TokenStoreCfg: tokenStoreCfg,
 	}, nil
 }
 
