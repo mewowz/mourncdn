@@ -31,6 +31,8 @@ func NewCDNServer(
 	serveCfg localAssetServerConfig,
 	uploadCfg localAssetUploaderConfig,
 	cdnCfg CDNServerConfig,
+	authCfg authMiddleConfig,
+	tokenStore *TokenStore,
 	logger *slog.Logger,
 ) (*CDNServer, error) {
 	if logger == nil {
@@ -47,9 +49,24 @@ func NewCDNServer(
 		return nil, fmt.Errorf("initialze upload server: %w", err)
 	}
 
+	authMiddle, err := NewAuthMiddleHandler(authCfg, tokenStore, logger)
+	if err != nil {
+		return nil, fmt.Errorf("initialize auth middleware: %w", err)
+	}
+
 	mux := http.NewServeMux()
-	mux.Handle(fmt.Sprintf("GET %s/{id...}", cdnCfg.ServeRoute), serveHandler)
-	mux.Handle(fmt.Sprintf("POST %s", cdnCfg.UploadRoute), HTTPAuthenticator(uploadHandler))
+	mux.Handle(
+		fmt.Sprintf(
+			"GET %s/{id...}", cdnCfg.ServeRoute,
+		),
+		serveHandler,
+	)
+	mux.Handle(
+		fmt.Sprintf(
+			"POST %s", cdnCfg.UploadRoute,
+		),
+		authMiddle.HTTPAuthenticator(uploadHandler, uploadCfg),
+	)
 
 	server := &http.Server{
 		Addr:              cdnCfg.Address,
