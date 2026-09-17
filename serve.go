@@ -94,7 +94,14 @@ func (s *LocalAssetServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = s.writeAssetToClient(asset, w, r)
+	assetReader, err := asset.Open()
+	if err != nil {
+		s.handleCacheAndFetchErr(err, assetID, w, r)
+		return
+	}
+	defer assetReader.Close()
+
+	err = s.writeAssetToClient(assetReader, w, r)
 	if err != nil {
 		s.handleWriteAssetToClientError(assetID, r, err)
 		return
@@ -194,16 +201,10 @@ func (s *LocalAssetServer) cacheAndFetch(
 }
 
 func (s *LocalAssetServer) writeAssetToClient(
-	asset *LocalAsset,
+	assetReader io.Reader,
 	w http.ResponseWriter,
 	r *http.Request,
 ) error {
-	assetReader, err := asset.Open()
-	if err != nil {
-		return err
-	}
-	defer assetReader.Close()
-
 	rc := http.NewResponseController(w)
 
 	deadlineUnsupportedLogged := false

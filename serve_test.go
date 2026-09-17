@@ -365,6 +365,11 @@ func TestLocalAssetServer_writeAssetToClient(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			assetReader, err := asset.Open()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer assetReader.Close()
 
 			if test.cacheAsset {
 				if err = asset.cache(time.Now().Add(time.Hour)); err != nil {
@@ -411,7 +416,7 @@ func TestLocalAssetServer_writeAssetToClient(t *testing.T) {
 				writer = recorder
 			}
 
-			err = server.writeAssetToClient(asset, writer, req)
+			err = server.writeAssetToClient(assetReader, writer, req)
 			if !errors.Is(err, test.expectedErr) {
 				t.Fatalf("got err=%v, want %v", err, test.expectedErr)
 			}
