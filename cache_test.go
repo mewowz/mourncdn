@@ -453,7 +453,7 @@ func TestLocalAssetCache_Fetch(t *testing.T) {
 
 	knownAsset := &LocalAsset{
 		Path:     testFilePath1,
-		FileInfo: testFileInfo2,
+		FileInfo: testFileInfo1,
 	}
 	unknownAsset := &LocalAsset{
 		Path:     testFilePath2,
