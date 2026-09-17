@@ -20,10 +20,10 @@ type Metrics struct {
 }
 
 type MetricsServerConfig struct {
-	Addr                   string
-	Route                  string
-	ShutdownTimeoutSeconds time.Duration
-	PromCfg                promhttp.HandlerOpts
+	Addr                   string               `koanf:"address"`
+	Route                  string               `koanf:"endpoint"`
+	ShutdownTimeoutSeconds time.Duration        `koanf:"advanced.shutdown-timeout"`
+	PromCfg                promhttp.HandlerOpts `koanf:"-"`
 }
 
 func NewMetrics(reg prometheus.Registerer) *Metrics {
@@ -113,7 +113,7 @@ func ServeMetricsWithContext(
 	}
 
 	shutdownCtx, shutdownCtxCancelF := context.WithTimeout(
-		context.Background(), cfg.ShutdownTimeoutSeconds*time.Second,
+		context.Background(), cfg.ShutdownTimeoutSeconds,
 	)
 	defer shutdownCtxCancelF()
 

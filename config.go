@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/mewowz/mourncdn/internal/metrics"
+
 	"github.com/dustin/go-humanize"
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/knadh/koanf/parsers/yaml"
@@ -20,6 +22,7 @@ type Config struct {
 	HTTPCfg       CDNServerConfig
 	AuthCfg       authMiddleConfig
 	TokenStoreCfg tokenStoreConfig
+	MetricsCfg    metrics.MetricsServerConfig
 }
 
 func defaultKoanfConfig() (*koanf.Koanf, error) {
@@ -49,6 +52,10 @@ func defaultKoanfConfig() (*koanf.Koanf, error) {
 		"token-store.dbdriver":               "sqlite",
 		"token-store.dbpath":                 "./data/ts.sql",
 		"token-store.advanced.db-op-timeout": "3s",
+
+		"metrics.address":                   "127.0.0.1:9884",
+		"metrics.endpoint":                  "/metrics",
+		"metrics.advanced.shutdown-timeout": "3s",
 	}
 
 	k := koanf.New(".")
@@ -106,11 +113,17 @@ func LoadConfigFile(path string) (*Config, error) {
 		return nil, fmt.Errorf("token config: %w", err)
 	}
 
+	var metricsCfg metrics.MetricsServerConfig
+	if err := k.UnmarshalWithConf("metrics", &metricsCfg, uc); err != nil {
+		return nil, fmt.Errorf("metrics config: %w", err)
+	}
+
 	return &Config{
 		ServeCfg:      serveCfg,
 		UploadCfg:     uploadCfg,
 		HTTPCfg:       cdnCfg,
 		AuthCfg:       authCfg,
+		MetricsCfg:    metricsCfg,
 		TokenStoreCfg: tokenStoreCfg,
 	}, nil
 }

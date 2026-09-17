@@ -4,10 +4,12 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/mewowz/mourncdn/internal/metrics"
 )
 
 func TestLoadConfigFile(t *testing.T) {
@@ -47,6 +49,12 @@ token-store:
   dbpath: ./custom/tokens.db
   advanced:
     db-op-timeout: 750ms
+
+metrics:
+  address: localhost:9885
+  endpoint: /custom-metrics
+  advanced:
+    shutdown-timeout: 750ms
 `)
 
 	if err := os.WriteFile(configPath, configData, 0o777); err != nil {
@@ -90,10 +98,33 @@ token-store:
 			DBPath:      "./custom/tokens.db",
 			DBOpTimeout: 750 * time.Millisecond,
 		},
+		MetricsCfg: metrics.MetricsServerConfig{
+			Addr:                   "localhost:9885",
+			Route:                  "/custom-metrics",
+			ShutdownTimeoutSeconds: 750 * time.Millisecond,
+		},
 	}
 
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("LoadConfigFile() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestLoadConfigFileExampleDefaults(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.yml")
+	if err := os.WriteFile(configPath, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	want, err := LoadConfigFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadConfigFile("config-example.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("example config differs from defaults (-want +got):\n%s", diff)
 	}
 }
 
@@ -137,6 +168,68 @@ func TestLoadConfigFileAuthDefaults(t *testing.T) {
 			}
 			if diff := cmp.Diff(test.expectedTokenStore, got.TokenStoreCfg); diff != "" {
 				t.Errorf("token store config mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestLoadConfigFileMetrics(t *testing.T) {
+	tests := []struct {
+		name       string
+		configData string
+		want       metrics.MetricsServerConfig
+		wantErr    string
+	}{
+		{
+			name:       "missing metrics section uses defaults",
+			configData: "{}\n",
+			want: metrics.MetricsServerConfig{
+				Addr:                   "127.0.0.1:9884",
+				Route:                  "/metrics",
+				ShutdownTimeoutSeconds: 3 * time.Second,
+			},
+		},
+		{
+			name:       "partial metrics config retains remaining defaults",
+			configData: "metrics:\n  endpoint: /custom-metrics\n",
+			want: metrics.MetricsServerConfig{
+				Addr:                   "127.0.0.1:9884",
+				Route:                  "/custom-metrics",
+				ShutdownTimeoutSeconds: 3 * time.Second,
+			},
+		},
+		{
+			name:       "explicit zero timeout overrides default",
+			configData: "metrics:\n  advanced:\n    shutdown-timeout: 0s\n",
+			want: metrics.MetricsServerConfig{
+				Addr:  "127.0.0.1:9884",
+				Route: "/metrics",
+			},
+		},
+		{
+			name:       "invalid metrics timeout returns metrics config error",
+			configData: "metrics:\n  advanced:\n    shutdown-timeout: invalid\n",
+			wantErr:    "metrics config:",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			configPath := filepath.Join(t.TempDir(), "config.yml")
+			if err := os.WriteFile(configPath, []byte(test.configData), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			got, err := LoadConfigFile(configPath)
+			if test.wantErr != "" {
+				if err == nil || !strings.HasPrefix(err.Error(), test.wantErr) {
+					t.Fatalf("got err=%v, want prefix %q", err, test.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(test.want, got.MetricsCfg); diff != "" {
+				t.Errorf("metrics config mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

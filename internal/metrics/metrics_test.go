@@ -27,7 +27,7 @@ func TestServeMetricsWithContext(t *testing.T) {
 		err = ServeMetricsWithContext(ctx, prometheus.NewRegistry(), MetricsServerConfig{
 			Addr:                   listener.Addr().String(),
 			Route:                  "/upload",
-			ShutdownTimeoutSeconds: 3,
+			ShutdownTimeoutSeconds: 3 * time.Second,
 			PromCfg:                promhttp.HandlerOpts{},
 		})
 
@@ -46,7 +46,7 @@ func TestServeMetricsWithContext(t *testing.T) {
 			err := ServeMetricsWithContext(ctx, prometheus.NewRegistry(), MetricsServerConfig{
 				Addr:                   "localhost:0",
 				Route:                  "/upload",
-				ShutdownTimeoutSeconds: 3,
+				ShutdownTimeoutSeconds: 3 * time.Second,
 				PromCfg:                promhttp.HandlerOpts{},
 			})
 			errCh <- err

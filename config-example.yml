@@ -32,3 +32,9 @@ token-store:
   dbpath: ./data/ts.sql
   advanced:
     db-op-timeout: 3s
+
+metrics:
+  address: 127.0.0.1:9884
+  endpoint: /metrics
+  advanced:
+    shutdown-timeout: 3s
