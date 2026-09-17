@@ -314,7 +314,8 @@ func TestLocalAsset_OpenConcurrent(t *testing.T) {
 			ttl := time.Now().Add(time.Second)
 			err = asset.cache(ttl)
 			if err != nil {
-				t.Fatalf("cache: %v", err)
+				t.Errorf("cache: %v", err)
+				return
 			}
 			asset.uncache()
 		}
@@ -324,16 +325,19 @@ func TestLocalAsset_OpenConcurrent(t *testing.T) {
 	cacheReader := func() {
 		r, err := asset.Open()
 		if err != nil {
-			t.Fatalf("asset Open(): %v", err)
+			t.Errorf("asset Open(): %v", err)
+			return
 		}
 		defer r.Close()
 
 		data, err := io.ReadAll(r)
 		if err != nil {
-			t.Fatalf("io.Read: %v", err)
+			t.Errorf("io.Read: %v", err)
+			return
 		}
 		if !bytes.Equal(data, testFileData) {
-			t.Fatalf("data=%v != testFileData=%v", data, testFileData)
+			t.Errorf("data=%v != testFileData=%v", data, testFileData)
+			return
 		}
 	}
 
