@@ -6,7 +6,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -895,4 +897,116 @@ func TestLocalAsset_IsCached(t *testing.T) {
 			t.Errorf("asset.IsCached=%v, want true", cached)
 		}
 	})
+}
+
+func TestCacheInsertEvictConcurrent(t *testing.T) {
+	var wg sync.WaitGroup
+	tmpDir := t.TempDir()
+	startCh := make(chan struct{})
+
+	assetMaxSize := int64(8)
+	cacheMaxSize := int64(9)
+
+	// Files of sizes: 1, 2, 4, 8, 64 = 79 total
+	// The last one is to ensure that asset size polices
+	// are enforced
+	fileNames := []string{}
+	for _, size := range []int{1, 2, 4, 8, 64} {
+		fileName := strconv.Itoa(size) + ".bin"
+		outPath := filepath.Join(tmpDir, fileName)
+		err := os.WriteFile(
+			outPath,
+			bytes.Repeat([]byte{0x0}, size),
+			0o777,
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fileNames = append(fileNames, fileName)
+	}
+
+	metrics := metricsServer.NewMetrics(prometheus.NewRegistry())
+	cache, err := NewLocalAssetCache(
+		tmpDir,
+		assetMaxSize,
+		cacheMaxSize,
+		time.Minute,
+		metrics,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// preload
+	err = os.WriteFile(
+		filepath.Join(tmpDir, "preload.bin"),
+		bytes.Repeat([]byte{1}, 8),
+		0o777,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = cache.Cache("preload.bin"); err != nil {
+		t.Fatal(err)
+	}
+
+	preloadedAsset, err := cache.Fetch("preload.bin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	preloadedAsset.expiresAt = time.Now().Add(-time.Hour)
+
+	successfulInserts := atomic.Int32{}
+	for _, fileName := range fileNames {
+		for range 3 {
+			wg.Go(func() {
+				<-startCh
+				err := cache.Cache(fileName)
+
+				if fileName == "64.bin" {
+					if !errors.Is(err, ErrAssetTooLargeToCache) {
+						t.Errorf("got err=%v, want ErrAssetTooLarge", err)
+					}
+					return
+				}
+				if err != nil && !errors.Is(err, ErrCacheFull) {
+					t.Errorf("got unexpected err=%v", err)
+				}
+				if err == nil {
+					successfulInserts.Add(1)
+				}
+			})
+		}
+	}
+
+	close(startCh)
+	wg.Wait()
+
+	if cache.cacheSize > cacheMaxSize {
+		t.Fatalf("got cache.cacheSize=%v > %v, want <=", cache.cacheSize, cacheMaxSize)
+	}
+
+	if successfulInserts.Load() == 0 {
+		t.Fatal("no cache inserts performed")
+	}
+
+	asset, err := cache.Fetch("preload.bin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if asset.cacheState().Cached {
+		t.Fatal("preloaded, expired asset was not uncached")
+	}
+
+	cachedAssetSum := 0
+	for _, asset := range cache.assets {
+		if asset.cacheState().Cached {
+			cachedAssetSum += len(asset.cachedBytes)
+		}
+	}
+	if int64(cachedAssetSum) != cache.cacheSize {
+		t.Fatalf(
+			"got cachedAssetSum=%v != cache.cacheSize=%v, want ==",
+			cachedAssetSum, cache.cacheSize,
+		)
+	}
 }
