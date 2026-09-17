@@ -189,6 +189,7 @@ func TestLocalAsset_Open(t *testing.T) {
 			if !errors.Is(err, test.expectedErr) {
 				t.Errorf("got %v, want %v", err, test.expectedErr)
 			}
+			defer r.Close()
 
 			data, err := io.ReadAll(r)
 			if err != nil {
@@ -325,6 +326,8 @@ func TestLocalAsset_OpenConcurrent(t *testing.T) {
 		if err != nil {
 			t.Fatalf("asset Open(): %v", err)
 		}
+		defer r.Close()
+
 		data, err := io.ReadAll(r)
 		if err != nil {
 			t.Fatalf("io.Read: %v", err)
