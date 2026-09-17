@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	metricsServer "github.com/mewowz/mourncdn/internal/metrics"
 )
 
 var (
@@ -21,7 +23,8 @@ type LocalAssetServer struct {
 	writeBufSize int
 	writeWindow  time.Duration
 
-	logger *slog.Logger
+	logger  *slog.Logger
+	metrics *metricsServer.Metrics
 }
 
 type localAssetServerConfig struct {
@@ -39,12 +42,14 @@ type localAssetServerConfig struct {
 func NewLocalAssetServer(
 	cfg localAssetServerConfig,
 	logger *slog.Logger,
+	metrics *metricsServer.Metrics,
 ) (*LocalAssetServer, error) {
 	cache, err := NewLocalAssetCache(
 		cfg.AssetDir,
 		cfg.AssetMaxSize,
 		cfg.CacheMaxSize,
 		cfg.TTL,
+		metrics,
 	)
 	if err != nil {
 		return nil, err
@@ -62,11 +67,16 @@ func NewLocalAssetServer(
 		return nil, ErrInvalidWriteWindow
 	}
 
+	if metrics == nil {
+		return nil, ErrNilMetrics
+	}
+
 	return &LocalAssetServer{
 		cache:        cache,
 		logger:       logger,
 		writeBufSize: cfg.WriteBufSize,
 		writeWindow:  cfg.WriteWindow,
+		metrics:      metrics,
 	}, nil
 }
 

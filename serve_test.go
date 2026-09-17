@@ -14,6 +14,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	metricsServer "github.com/mewowz/mourncdn/internal/metrics"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 func TestNewLocalAssetServer(t *testing.T) {
@@ -23,6 +25,7 @@ func TestNewLocalAssetServer(t *testing.T) {
 		name        string
 		cfg         localAssetServerConfig
 		logger      *slog.Logger
+		metrics     *metricsServer.Metrics
 		expectedErr error
 	}{
 		{
@@ -36,6 +39,7 @@ func TestNewLocalAssetServer(t *testing.T) {
 				time.Second,
 			},
 			nil,
+			metricsServer.NewMetrics(prometheus.NewRegistry()),
 			nil,
 		},
 		{
@@ -49,6 +53,7 @@ func TestNewLocalAssetServer(t *testing.T) {
 				time.Second,
 			},
 			slog.New(slog.DiscardHandler),
+			metricsServer.NewMetrics(prometheus.NewRegistry()),
 			nil,
 		},
 		{
@@ -62,6 +67,7 @@ func TestNewLocalAssetServer(t *testing.T) {
 				time.Second,
 			},
 			nil,
+			metricsServer.NewMetrics(prometheus.NewRegistry()),
 			os.ErrNotExist,
 		},
 		{
@@ -75,6 +81,7 @@ func TestNewLocalAssetServer(t *testing.T) {
 				time.Second,
 			},
 			nil,
+			metricsServer.NewMetrics(prometheus.NewRegistry()),
 			ErrInvalidWriteBufSize,
 		},
 		{
@@ -88,7 +95,22 @@ func TestNewLocalAssetServer(t *testing.T) {
 				-1 * time.Second,
 			},
 			nil,
+			metricsServer.NewMetrics(prometheus.NewRegistry()),
 			ErrInvalidWriteWindow,
+		},
+		{
+			"metrics is nil",
+			localAssetServerConfig{
+				testDirPath,
+				1,
+				2,
+				time.Second,
+				1,
+				time.Second,
+			},
+			nil,
+			nil,
+			ErrNilMetrics,
 		},
 	}
 
@@ -97,6 +119,7 @@ func TestNewLocalAssetServer(t *testing.T) {
 			got, err := NewLocalAssetServer(
 				test.cfg,
 				test.logger,
+				test.metrics,
 			)
 			if !errors.Is(err, test.expectedErr) {
 				t.Fatalf("got %v, want %v", err, test.expectedErr)
@@ -107,23 +130,27 @@ func TestNewLocalAssetServer(t *testing.T) {
 			}
 
 			if test.logger != nil && got.logger != test.logger {
-				t.Fatalf("got.logger=%v, want logger=%v", got.logger, test.logger)
+				t.Fatalf("got logger=%v, want logger=%v", got.logger, test.logger)
 			}
 
 			want := &LocalAssetServer{
 				writeBufSize: test.cfg.WriteBufSize,
 				writeWindow:  test.cfg.WriteWindow,
 				logger:       slog.New(slog.DiscardHandler),
+				metrics:      test.metrics,
 			}
 
 			diff := cmp.Diff(
 				got,
 				want,
 				cmp.AllowUnexported(LocalAssetServer{}),
-				cmpopts.IgnoreFields(LocalAssetServer{}, "cache", "logger"),
+				cmpopts.IgnoreFields(LocalAssetServer{}, "cache", "logger", "metrics"),
 			)
 			if diff != "" {
-				t.Errorf("NewLocalAssetServer() mismatch (-want, +got):\n%s", diff)
+				t.Fatalf("NewLocalAssetServer() mismatch (-want, +got):\n%s", diff)
+			}
+			if got.metrics != test.metrics && got.cache.metrics != test.metrics {
+				t.Fatalf("got metrics=%v, want %v", got.metrics, test.metrics)
 			}
 		})
 	}
@@ -202,6 +229,7 @@ func TestLocalAssetServer_cacheAndFetch(t *testing.T) {
 				}
 			}
 
+			metrics := metricsServer.NewMetrics(prometheus.NewRegistry())
 			server, err := NewLocalAssetServer(
 				localAssetServerConfig{
 					testDirPath,
@@ -212,6 +240,7 @@ func TestLocalAssetServer_cacheAndFetch(t *testing.T) {
 					time.Second,
 				},
 				nil,
+				metrics,
 			)
 			if err != nil {
 				t.Fatal(err)
@@ -349,10 +378,12 @@ func TestLocalAssetServer_writeAssetToClient(t *testing.T) {
 				}
 			}
 
+			metrics := metricsServer.NewMetrics(prometheus.NewRegistry())
 			server := &LocalAssetServer{
 				writeBufSize: 3,
 				writeWindow:  time.Second,
 				logger:       slog.New(slog.DiscardHandler),
+				metrics:      metrics,
 			}
 
 			req := httptest.NewRequest(
@@ -430,8 +461,10 @@ func TestLocalAssetServer_handleCachAndFetchErr(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			metrics := metricsServer.NewMetrics(prometheus.NewRegistry())
 			assetServer := &LocalAssetServer{
-				logger: slog.New(slog.DiscardHandler),
+				logger:  slog.New(slog.DiscardHandler),
+				metrics: metrics,
 			}
 			writer := &errorResponseWriter{
 				header: make(http.Header),
