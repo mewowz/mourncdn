@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	metricsServer "github.com/mewowz/mourncdn/internal/metrics"
 )
 
 var (
@@ -23,6 +25,7 @@ var (
 	ErrInvalidAssetName            = errors.New("invalid asset name")
 	ErrAssetTooLargeToCache        = errors.New("asset too large to cache")
 	ErrNotAFile                    = errors.New("path does not resolve to a file")
+	ErrNilMetrics                  = errors.New("cannot have nil metrics server")
 )
 
 type LocalAssetCache struct {
@@ -35,7 +38,8 @@ type LocalAssetCache struct {
 
 	ttl time.Duration
 
-	mu sync.RWMutex
+	mu      sync.RWMutex
+	metrics *metricsServer.Metrics
 }
 
 type LocalAsset struct {
@@ -59,6 +63,7 @@ func NewLocalAssetCache(
 	assetMaxSize,
 	cacheMaxSize int64,
 	ttl time.Duration,
+	metrics *metricsServer.Metrics,
 ) (*LocalAssetCache, error) {
 	assetDir = filepath.Clean(assetDir)
 	assetDirInfo, err := os.Stat(assetDir)
@@ -99,12 +104,17 @@ func NewLocalAssetCache(
 		return nil, fmt.Errorf("local asset cache ttl=%s: %w", ttl, ErrInvalidTTL)
 	}
 
+	if metrics == nil {
+		return nil, ErrNilMetrics
+	}
+
 	return &LocalAssetCache{
 		assetDir:     assetDir,
 		assetMaxSize: assetMaxSize,
 		cacheMaxSize: cacheMaxSize,
 		assets:       make(map[string]*LocalAsset),
 		ttl:          ttl,
+		metrics:      metrics,
 	}, nil
 }
 

@@ -9,6 +9,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	metricsServer "github.com/mewowz/mourncdn/internal/metrics"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 func TestNewLocalAssetCache(t *testing.T) {
@@ -30,6 +33,7 @@ func TestNewLocalAssetCache(t *testing.T) {
 		assetMaxSize int64
 		cacheMaxSize int64
 		ttl          time.Duration
+		metrics      *metricsServer.Metrics
 		expectedErr  error
 	}{
 		{
@@ -38,6 +42,7 @@ func TestNewLocalAssetCache(t *testing.T) {
 			1,
 			2,
 			time.Second * 1,
+			metricsServer.NewMetrics(prometheus.NewRegistry()),
 			nil,
 		},
 		{
@@ -73,6 +78,15 @@ func TestNewLocalAssetCache(t *testing.T) {
 			ttl:          time.Second * -1,
 			expectedErr:  ErrInvalidTTL,
 		},
+		{
+			name:         "metrics is nil",
+			assetDir:     testDirPath,
+			assetMaxSize: 1,
+			cacheMaxSize: 2,
+			ttl:          time.Second * 1,
+			metrics:      nil,
+			expectedErr:  ErrNilMetrics,
+		},
 	}
 
 	for _, test := range tests {
@@ -82,6 +96,7 @@ func TestNewLocalAssetCache(t *testing.T) {
 				test.assetMaxSize,
 				test.cacheMaxSize,
 				test.ttl,
+				test.metrics,
 			)
 
 			if !errors.Is(err, test.expectedErr) {
@@ -374,8 +389,10 @@ func TestLocalAssetCache_uncacheAssetLocked(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			metrics := metricsServer.NewMetrics(prometheus.NewRegistry())
 			assetCache := &LocalAssetCache{
 				cacheSize: test.initialCacheSize,
+				metrics:   metrics,
 			}
 			assetCache.uncacheAssetLocked(test.asset)
 			if assetCache.cacheSize != test.postCacheSize {
@@ -453,11 +470,13 @@ func TestLocalAssetCache_Fetch(t *testing.T) {
 		},
 	}
 
+	metrics := metricsServer.NewMetrics(prometheus.NewRegistry())
 	cache, err := NewLocalAssetCache(
 		testDirPath,
 		2,
 		4,
 		time.Second,
+		metrics,
 	)
 	if err != nil {
 		t.Fatalf("could not create cache: %v", err)
@@ -579,8 +598,10 @@ func TestLocalAssetCache_findEvictionCandidatesLocked(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			metrics := metricsServer.NewMetrics(prometheus.NewRegistry())
 			cache := &LocalAssetCache{
-				assets: test.assets,
+				assets:  test.assets,
+				metrics: metrics,
 			}
 
 			got := cache.findEvictionCandidatesLocked(
@@ -612,6 +633,7 @@ func TestLocalAssetCache_findEvictionCandidatesLocked(t *testing.T) {
 
 func TestLocalAssetCache_Cache(t *testing.T) {
 	testDirPath := t.TempDir()
+	metrics := metricsServer.NewMetrics(prometheus.NewRegistry())
 
 	testFileName1 := "abcd.jpg"
 	testFileName2 := "bcdf.png"
@@ -742,6 +764,7 @@ func TestLocalAssetCache_Cache(t *testing.T) {
 				test.assetMaxSize,
 				test.cacheMaxSize,
 				time.Second,
+				metrics,
 			)
 			if err != nil {
 				t.Fatalf("could not create cache: %v", err)
