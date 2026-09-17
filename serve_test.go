@@ -476,10 +476,11 @@ func TestLocalAssetServer_handleCachAndFetchErr(t *testing.T) {
 				URL: &url.URL{},
 			}
 			assetID := "abcd.jpg"
+			sw := &metricsServer.StatusWriter{ResponseWriter: writer}
 			assetServer.handleCacheAndFetchErr(
 				test.err,
 				assetID,
-				writer,
+				sw,
 				request,
 			)
 			if writer.statusCode != test.expectedStatus {

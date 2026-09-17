@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -24,6 +25,12 @@ type MetricsServerConfig struct {
 	Route                  string               `koanf:"endpoint"`
 	ShutdownTimeoutSeconds time.Duration        `koanf:"advanced.shutdown-timeout"`
 	PromCfg                promhttp.HandlerOpts `koanf:"-"`
+}
+
+type StatusWriter struct {
+	http.ResponseWriter
+
+	status int
 }
 
 func NewMetrics(reg prometheus.Registerer) *Metrics {
@@ -124,4 +131,20 @@ func ServeMetricsWithContext(
 
 	closeErr := srv.Close()
 	return errors.Join(err, closeErr)
+}
+
+func (w *StatusWriter) WriteHeader(code int) {
+	w.status = code
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *StatusWriter) Write(p []byte) (int, error) {
+	if w.status == 0 {
+		w.status = http.StatusOK
+	}
+	return w.ResponseWriter.Write(p)
+}
+
+func (w *StatusWriter) StatusString() string {
+	return strconv.Itoa(w.status)
 }

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	metricsServer "github.com/mewowz/mourncdn/internal/metrics"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 var (
@@ -86,26 +87,40 @@ func (s *LocalAssetServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// where "id" points to a filename relative to the source dir.
 	// For instance, for the route "/assets/{id...}" and AssetDir = ./data/assets/:
 	// http://foo.com/assets/abcdef.jpg -> ./data/assets/abcdef.jpg
+	sw := &metricsServer.StatusWriter{ResponseWriter: w}
+
+	timeStart := time.Now()
+	defer func() {
+		timeEnd := time.Now()
+		dt := timeEnd.Sub(timeStart).Seconds()
+		s.metrics.RequestsDuration.With(
+			prometheus.Labels{"method": r.Method, "status": sw.StatusString()},
+		).Observe(dt)
+	}()
 
 	assetID := r.PathValue("id")
 	asset, err := s.cacheAndFetch(assetID)
 	if err != nil {
-		s.handleCacheAndFetchErr(err, assetID, w, r)
+		s.handleCacheAndFetchErr(err, assetID, sw, r)
 		return
 	}
 
 	assetReader, err := asset.Open()
 	if err != nil {
-		s.handleCacheAndFetchErr(err, assetID, w, r)
+		s.handleCacheAndFetchErr(err, assetID, sw, r)
 		return
 	}
 	defer assetReader.Close()
 
-	err = s.writeAssetToClient(assetReader, w, r)
+	err = s.writeAssetToClient(assetReader, sw, r)
 	if err != nil {
 		s.handleWriteAssetToClientError(assetID, r, err)
 		return
 	}
+
+	s.metrics.TotalRequests.With(
+		prometheus.Labels{"method": r.Method, "status": sw.StatusString()},
+	).Inc()
 }
 
 func (s *LocalAssetServer) handleWriteAssetToClientError(
@@ -146,7 +161,7 @@ func (s *LocalAssetServer) handleWriteAssetToClientError(
 func (s *LocalAssetServer) handleCacheAndFetchErr(
 	err error,
 	assetID string,
-	w http.ResponseWriter,
+	w *metricsServer.StatusWriter,
 	r *http.Request,
 ) {
 	writeErrorLogger := s.logger.With(
@@ -157,18 +172,26 @@ func (s *LocalAssetServer) handleCacheAndFetchErr(
 		"url", r.URL.String(),
 	)
 
+	var statusCode int
+	var statusString string
+
 	w.Header().Set("Cache-Control", "no-store")
 	switch {
 	case errors.Is(err, ErrInvalidAssetName):
-		http.Error(w, "not found", http.StatusNotFound)
+		statusCode = http.StatusNotFound
+		statusString = "not found"
 	case errors.Is(err, ErrNotAFile):
-		http.Error(w, "not found", http.StatusNotFound)
+		statusCode = http.StatusNotFound
+		statusString = "not found"
 	case errors.Is(err, os.ErrNotExist):
-		http.Error(w, "not found", http.StatusNotFound)
+		statusCode = http.StatusNotFound
+		statusString = "not found"
 	default:
-		http.Error(w, "server error", http.StatusInternalServerError)
+		statusCode = http.StatusInternalServerError
+		statusString = "server error"
 		writeErrorLogger.Error("failed to fetch asset")
 	}
+	http.Error(w, statusString, statusCode)
 }
 
 func (s *LocalAssetServer) cacheAndFetch(
@@ -205,6 +228,12 @@ func (s *LocalAssetServer) writeAssetToClient(
 	w http.ResponseWriter,
 	r *http.Request,
 ) error {
+	bytesCounter := s.metrics.BytesTransferred.With(
+		prometheus.Labels{"direction": "egress"},
+	)
+	bytesWritten := 0
+	defer bytesCounter.Add(float64(bytesWritten))
+
 	rc := http.NewResponseController(w)
 
 	deadlineUnsupportedLogged := false
@@ -223,10 +252,11 @@ func (s *LocalAssetServer) writeAssetToClient(
 			s.logger.Debug("deadline", "err", deadlineErr)
 		}
 		if n > 0 {
-			_, writeErr := w.Write(buf[:n])
+			n, writeErr := w.Write(buf[:n])
 			if writeErr != nil {
 				return writeErr
 			}
+			bytesWritten += n
 		}
 
 		if errors.Is(err, io.EOF) {
