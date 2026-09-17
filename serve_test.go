@@ -149,7 +149,7 @@ func TestNewLocalAssetServer(t *testing.T) {
 			if diff != "" {
 				t.Fatalf("NewLocalAssetServer() mismatch (-want, +got):\n%s", diff)
 			}
-			if got.metrics != test.metrics && got.cache.metrics != test.metrics {
+			if got.metrics != test.metrics || got.cache.metrics != test.metrics {
 				t.Fatalf("got metrics=%v, want %v", got.metrics, test.metrics)
 			}
 		})
