@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"log/slog"
@@ -300,7 +301,6 @@ func TestLocalAssetServer_writeAssetToClient(t *testing.T) {
 		name          string
 		fileData      []byte
 		cacheAsset    bool
-		removeFile    bool
 		cancelRequest bool
 		writeErr      error
 		expectedErr   error
@@ -308,7 +308,6 @@ func TestLocalAssetServer_writeAssetToClient(t *testing.T) {
 		{
 			"uncached asset written",
 			[]byte{0x01},
-			false,
 			false,
 			false,
 			nil,
@@ -319,23 +318,29 @@ func TestLocalAssetServer_writeAssetToClient(t *testing.T) {
 			[]byte{0x01},
 			true,
 			false,
-			false,
 			nil,
 			nil,
 		},
 		{
-			"asset open error propagated",
-			[]byte{0x01},
+			"uncached file larger than write buffer written",
+			bytes.Repeat([]byte{0x01}, 200),
 			false,
+			false,
+			nil,
+			nil,
+		},
+
+		{
+			"cached file larger than write buffer written",
+			bytes.Repeat([]byte{0x01}, 200),
 			true,
 			false,
 			nil,
-			os.ErrNotExist,
+			nil,
 		},
 		{
 			"cancelled request propagated",
 			[]byte{0x01},
-			false,
 			false,
 			true,
 			nil,
@@ -344,7 +349,6 @@ func TestLocalAssetServer_writeAssetToClient(t *testing.T) {
 		{
 			"write error propagated",
 			[]byte{0x01},
-			false,
 			false,
 			false,
 			errWrite,
@@ -365,23 +369,17 @@ func TestLocalAssetServer_writeAssetToClient(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			assetReader, err := asset.Open()
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer assetReader.Close()
 
 			if test.cacheAsset {
 				if err = asset.cache(time.Now().Add(time.Hour)); err != nil {
 					t.Fatal(err)
 				}
 			}
-
-			if test.removeFile {
-				if err = os.Remove(filePath); err != nil {
-					t.Fatal(err)
-				}
+			assetReader, err := asset.Open()
+			if err != nil {
+				t.Fatal(err)
 			}
+			defer assetReader.Close()
 
 			metrics := metricsServer.NewMetrics(prometheus.NewRegistry())
 			server := &LocalAssetServer{
