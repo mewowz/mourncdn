@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	metricsServer "github.com/mewowz/mourncdn/internal/metrics"
 )
 
 type CDNServer struct {
@@ -33,13 +35,14 @@ func NewCDNServer(
 	cdnCfg CDNServerConfig,
 	authCfg authMiddleConfig,
 	tokenStore *TokenStore,
+	metrics *metricsServer.Metrics,
 	logger *slog.Logger,
 ) (*CDNServer, error) {
 	if logger == nil {
 		logger = slog.Default()
 		logger.Info("no logger specified - using default logger")
 	}
-	serveHandler, err := NewLocalAssetServer(serveCfg, logger)
+	serveHandler, err := NewLocalAssetServer(serveCfg, logger, metrics)
 	if err != nil {
 		return nil, fmt.Errorf("initialze asset server: %w", err)
 	}

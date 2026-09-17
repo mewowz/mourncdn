@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	metricsServer "github.com/mewowz/mourncdn/internal/metrics"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 func TestNewCDNServer(t *testing.T) {
@@ -38,6 +40,7 @@ func TestNewCDNServer(t *testing.T) {
 			t.Errorf("close token store: %v", err)
 		}
 	})
+	metrics := metricsServer.NewMetrics(prometheus.NewRegistry())
 
 	t.Run("bad serverCfg propagates error", func(t *testing.T) {
 		serverCfg := localAssetServerConfig{
@@ -49,6 +52,7 @@ func TestNewCDNServer(t *testing.T) {
 			CDNServerConfig{},
 			authCfg,
 			tokenStore,
+			metrics,
 			nil,
 		)
 		if err == nil {
@@ -76,6 +80,7 @@ func TestNewCDNServer(t *testing.T) {
 			CDNServerConfig{},
 			authCfg,
 			tokenStore,
+			metrics,
 			nil,
 		)
 		if err == nil {
@@ -129,6 +134,7 @@ func TestNewCDNServer(t *testing.T) {
 					cdnCfg,
 					test.authCfg,
 					test.tokenStore,
+					metrics,
 					logger,
 				)
 				if err == nil {
@@ -174,6 +180,7 @@ func TestNewCDNServer(t *testing.T) {
 			cdnCfg,
 			authCfg,
 			tokenStore,
+			metrics,
 			logger,
 		)
 		if err != nil {
