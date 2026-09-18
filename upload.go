@@ -14,6 +14,10 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
+
+	metricsServer "github.com/mewowz/mourncdn/internal/metrics"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/gabriel-vasile/mimetype"
 )
@@ -29,6 +33,8 @@ type LocalAssetUploader struct {
 	maxAssetUploadSize int64
 
 	logger *slog.Logger
+
+	metrics *metricsServer.Metrics
 }
 
 type localAssetUploaderConfig struct {
@@ -48,6 +54,7 @@ type assetMeta struct {
 func NewLocalAssetUploader(
 	cfg localAssetUploaderConfig,
 	logger *slog.Logger,
+	metrics *metricsServer.Metrics,
 ) (*LocalAssetUploader, error) {
 	if logger == nil {
 		logger = slog.Default()
@@ -74,30 +81,50 @@ func NewLocalAssetUploader(
 		)
 	}
 
+	if metrics == nil {
+		return nil, metricsServer.ErrNilMetrics
+	}
+
 	return &LocalAssetUploader{
 		tmpDirPath:         cfg.TmpDirPath,
 		outputDirPath:      cfg.OutputDirPath,
 		urlPrefix:          cfg.URLPrefix,
 		maxAssetUploadSize: cfg.MaxAssetUploadSize,
 		logger:             logger,
+		metrics:            metrics,
 	}, nil
 }
 
 func (u *LocalAssetUploader) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	sw := &metricsServer.StatusWriter{ResponseWriter: w}
+
+	defer u.metrics.TotalRequests.With(
+		prometheus.Labels{"method": r.Method, "status": sw.StatusString()},
+	).Inc()
+
+	timeStart := time.Now()
+	defer func() {
+		timeEnd := time.Now()
+		dt := timeEnd.Sub(timeStart).Seconds()
+		u.metrics.RequestsDuration.With(
+			prometheus.Labels{"method": r.Method, "status": sw.StatusString()},
+		).Observe(dt)
+	}()
+
 	if r.Method != "POST" {
 		w.Header().Set("Allow", "POST")
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		http.Error(sw, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	outFilePath, err := u.handleAssetUpload(w, r)
+	outFilePath, err := u.handleAssetUpload(sw, r)
 	if err != nil {
-		u.handleAssetUploadErr(err, w, r)
+		u.handleAssetUploadErr(err, sw, r)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
+	sw.Header().Set("Content-Type", "application/json")
+	sw.WriteHeader(http.StatusCreated)
 
 	err = json.NewEncoder(w).Encode(struct {
 		AssetPath string `json:"asset_path"`
@@ -162,6 +189,11 @@ func (u *LocalAssetUploader) handleAssetUpload(
 func (u *LocalAssetUploader) writeAssetUploadToDisk(
 	r io.ReadCloser,
 ) (assetMeta, error) {
+	var written int64
+	defer u.metrics.BytesTransferred.With(
+		prometheus.Labels{"direction": "ingress"},
+	).Add(float64(written))
+
 	var err error
 	outFile, err := os.CreateTemp(
 		u.tmpDirPath,
@@ -179,7 +211,7 @@ func (u *LocalAssetUploader) writeAssetUploadToDisk(
 	}()
 
 	h := sha512.New()
-	_, err = io.Copy(
+	written, err = io.Copy(
 		io.MultiWriter(outFile, h),
 		r,
 	)

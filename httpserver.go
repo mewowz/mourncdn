@@ -47,7 +47,7 @@ func NewCDNServer(
 		return nil, fmt.Errorf("initialze asset server: %w", err)
 	}
 
-	uploadHandler, err := NewLocalAssetUploader(uploadCfg, logger)
+	uploadHandler, err := NewLocalAssetUploader(uploadCfg, logger, metrics)
 	if err != nil {
 		return nil, fmt.Errorf("initialze upload server: %w", err)
 	}

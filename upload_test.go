@@ -16,16 +16,21 @@ import (
 	"strings"
 	"testing"
 
+	metricsServer "github.com/mewowz/mourncdn/internal/metrics"
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/gabriel-vasile/mimetype"
 )
 
 func TestNewLocalAssetUploader(t *testing.T) {
 	tempDirPath := t.TempDir()
+	metrics := metricsServer.NewMetrics(prometheus.NewRegistry())
 
 	tests := []struct {
 		name                string
 		urlPrefix           string
 		maxUploadSize       int64
+		metrics             *metricsServer.Metrics
 		expectedErr         error
 		expectedErrFragment string
 	}{
@@ -33,6 +38,7 @@ func TestNewLocalAssetUploader(t *testing.T) {
 			"no errors",
 			"/assets",
 			1,
+			metrics,
 			nil,
 			"",
 		},
@@ -40,6 +46,7 @@ func TestNewLocalAssetUploader(t *testing.T) {
 			"negative asset size limit",
 			"/assets",
 			-1,
+			metrics,
 			ErrInvalidAssetSizeLimit,
 			"",
 		},
@@ -47,6 +54,7 @@ func TestNewLocalAssetUploader(t *testing.T) {
 			"URL prefix not starting with /",
 			".assets/",
 			1,
+			metrics,
 			nil,
 			"must start with /",
 		},
@@ -54,6 +62,7 @@ func TestNewLocalAssetUploader(t *testing.T) {
 			"URL prefix containing query",
 			"/assets?x=1",
 			1,
+			metrics,
 			nil,
 			"query or fragment",
 		},
@@ -61,8 +70,17 @@ func TestNewLocalAssetUploader(t *testing.T) {
 			"URL prefix containing fragment",
 			"/assets#x=10",
 			1,
+			metrics,
 			nil,
 			"query or fragment",
+		},
+		{
+			"metrics pointer is nil",
+			"/assets",
+			1,
+			nil,
+			metricsServer.ErrNilMetrics,
+			"",
 		},
 	}
 
@@ -76,6 +94,7 @@ func TestNewLocalAssetUploader(t *testing.T) {
 					test.maxUploadSize,
 				},
 				slog.New(slog.DiscardHandler),
+				test.metrics,
 			)
 			if test.expectedErr != nil && !errors.Is(err, test.expectedErr) {
 				t.Fatalf("got %v, want %v", err, test.expectedErr)
@@ -153,6 +172,7 @@ func (e *errorReader) Close() error {
 
 func TestLocalAssetUploader_writeAssetToDisk(t *testing.T) {
 	tempDirPath := t.TempDir()
+	metrics := metricsServer.NewMetrics(prometheus.NewRegistry())
 
 	pngSig := []byte{
 		0x89, 'P', 'N', 'G',
@@ -191,6 +211,7 @@ func TestLocalAssetUploader_writeAssetToDisk(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			u := &LocalAssetUploader{
 				tmpDirPath: tempDirPath,
+				metrics:    metrics,
 			}
 
 			var reader io.ReadCloser
@@ -345,6 +366,7 @@ func TestLocalAssetUploader_moveAssetToOutputDir(t *testing.T) {
 func TestLocalAssetUploader_ServeHTTP(t *testing.T) {
 	urlPrefix := "/assets/"
 	target := "localhost:8983/upload"
+	metrics := metricsServer.NewMetrics(prometheus.NewRegistry())
 
 	type statusCreatedResponse struct {
 		AssetPath string `json:"asset_path"`
@@ -395,6 +417,7 @@ func TestLocalAssetUploader_ServeHTTP(t *testing.T) {
 					int64(maxUploadSize),
 				},
 				slog.New(slog.DiscardHandler),
+				metrics,
 			)
 			if err != nil {
 				t.Fatalf("LocalAssetUploader: %v", err)
