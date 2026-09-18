@@ -5,8 +5,12 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
+
+	metricsServer "github.com/mewowz/mourncdn/internal/metrics"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 const DefaultConfigFilePath = "./config.yml"
@@ -19,6 +23,8 @@ func main() {
 }
 
 func run(logger *slog.Logger) error {
+	var workersGroup sync.WaitGroup
+
 	config, err := LoadConfigFile(DefaultConfigFilePath)
 	if err != nil {
 		logger.Error("config", "err", err)
@@ -39,12 +45,31 @@ func run(logger *slog.Logger) error {
 		}
 	}()
 
+	reg := prometheus.NewRegistry()
+	metrics := metricsServer.NewMetrics(reg)
+	metricsCtx, metricsCancelF := context.WithCancel(context.Background())
+	defer func() {
+		metricsCancelF()
+		workersGroup.Wait()
+	}()
+	workersGroup.Go(func() {
+		metricsErr := metricsServer.ServeMetricsWithContext(
+			metricsCtx,
+			reg,
+			config.MetricsCfg,
+		)
+		if metricsErr != nil {
+			logger.Error("metrics server", "err", metricsErr)
+		}
+	})
+
 	server, err := NewCDNServer(
 		config.ServeCfg,
 		config.UploadCfg,
 		config.HTTPCfg,
 		config.AuthCfg,
 		tokenStore,
+		metrics,
 		logger,
 	)
 	if err != nil {
@@ -57,9 +82,9 @@ func run(logger *slog.Logger) error {
 
 	logger.Info("starting server", "address", config.HTTPCfg.Address)
 	errCh := make(chan error, 1)
-	go func() {
+	workersGroup.Go(func() {
 		errCh <- server.Start()
-	}()
+	})
 
 	select {
 	case err := <-errCh:
@@ -70,6 +95,8 @@ func run(logger *slog.Logger) error {
 	case <-c:
 		logger.Info("shutting down server gracefully")
 	}
+
+	metricsCancelF()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -82,7 +109,7 @@ func run(logger *slog.Logger) error {
 		}
 	}
 
-	<-errCh
+	workersGroup.Wait()
 	logger.Info("bye")
 
 	return nil
