@@ -11,6 +11,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+var ErrNilMetrics = errors.New("cannot have nil metrics server")
+
 type Metrics struct {
 	BytesTransferred *prometheus.CounterVec
 	CacheHits        prometheus.Counter
