@@ -89,9 +89,11 @@ func (s *LocalAssetServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// http://foo.com/assets/abcdef.jpg -> ./data/assets/abcdef.jpg
 	sw := &metricsServer.StatusWriter{ResponseWriter: w}
 
-	defer s.metrics.TotalRequests.With(
-		prometheus.Labels{"method": r.Method, "status": sw.StatusString()},
-	).Inc()
+	defer func() {
+		s.metrics.TotalRequests.With(
+			prometheus.Labels{"method": r.Method, "status": sw.StatusString()},
+		).Inc()
+	}()
 
 	timeStart := time.Now()
 	defer func() {
@@ -232,7 +234,7 @@ func (s *LocalAssetServer) writeAssetToClient(
 		prometheus.Labels{"direction": "egress"},
 	)
 	bytesWritten := 0
-	defer bytesCounter.Add(float64(bytesWritten))
+	defer func() { bytesCounter.Add(float64(bytesWritten)) }()
 
 	rc := http.NewResponseController(w)
 

@@ -269,7 +269,7 @@ func (c *LocalAssetCache) Cache(fileName string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	defer c.metrics.CacheSize.Set(float64(c.cacheSize))
+	defer func() { c.metrics.CacheSize.Set(float64(c.cacheSize)) }()
 
 	if asset.IsCached() {
 		return nil

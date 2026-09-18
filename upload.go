@@ -98,9 +98,11 @@ func NewLocalAssetUploader(
 func (u *LocalAssetUploader) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	sw := &metricsServer.StatusWriter{ResponseWriter: w}
 
-	defer u.metrics.TotalRequests.With(
-		prometheus.Labels{"method": r.Method, "status": sw.StatusString()},
-	).Inc()
+	defer func() {
+		u.metrics.TotalRequests.With(
+			prometheus.Labels{"method": r.Method, "status": sw.StatusString()},
+		).Inc()
+	}()
 
 	timeStart := time.Now()
 	defer func() {
@@ -190,9 +192,11 @@ func (u *LocalAssetUploader) writeAssetUploadToDisk(
 	r io.ReadCloser,
 ) (assetMeta, error) {
 	var written int64
-	defer u.metrics.BytesTransferred.With(
-		prometheus.Labels{"direction": "ingress"},
-	).Add(float64(written))
+	defer func() {
+		u.metrics.BytesTransferred.With(
+			prometheus.Labels{"direction": "ingress"},
+		).Add(float64(written))
+	}()
 
 	var err error
 	outFile, err := os.CreateTemp(
