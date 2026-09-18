@@ -87,7 +87,7 @@ func TestNewLocalAssetCache(t *testing.T) {
 			cacheMaxSize: 2,
 			ttl:          time.Second * 1,
 			metrics:      nil,
-			expectedErr:  ErrNilMetrics,
+			expectedErr:  metricsServer.ErrNilMetrics,
 		},
 	}
 

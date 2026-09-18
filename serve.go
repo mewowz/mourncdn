@@ -69,7 +69,7 @@ func NewLocalAssetServer(
 	}
 
 	if metrics == nil {
-		return nil, ErrNilMetrics
+		return nil, metricsServer.ErrNilMetrics
 	}
 
 	return &LocalAssetServer{

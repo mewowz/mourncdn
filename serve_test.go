@@ -111,7 +111,7 @@ func TestNewLocalAssetServer(t *testing.T) {
 			},
 			nil,
 			nil,
-			ErrNilMetrics,
+			metricsServer.ErrNilMetrics,
 		},
 	}
 

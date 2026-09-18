@@ -25,7 +25,6 @@ var (
 	ErrInvalidAssetName            = errors.New("invalid asset name")
 	ErrAssetTooLargeToCache        = errors.New("asset too large to cache")
 	ErrNotAFile                    = errors.New("path does not resolve to a file")
-	ErrNilMetrics                  = errors.New("cannot have nil metrics server")
 )
 
 type LocalAssetCache struct {
@@ -105,7 +104,7 @@ func NewLocalAssetCache(
 	}
 
 	if metrics == nil {
-		return nil, ErrNilMetrics
+		return nil, metricsServer.ErrNilMetrics
 	}
 
 	return &LocalAssetCache{
