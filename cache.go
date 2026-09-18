@@ -221,11 +221,6 @@ func (c *LocalAssetCache) Fetch(fileName string) (*LocalAsset, error) {
 
 	c.mu.RLock()
 	asset := c.assets[fileName]
-	if asset != nil && asset.IsCached() {
-		c.metrics.CacheHits.Inc()
-	} else {
-		c.metrics.CacheMisses.Inc()
-	}
 	c.mu.RUnlock()
 
 	if asset != nil {
@@ -257,6 +252,7 @@ func (c *LocalAssetCache) Cache(fileName string) error {
 
 	assetSize := asset.FileInfo.Size()
 	if assetSize > c.assetMaxSize {
+		c.metrics.CacheMisses.Inc()
 		return fmt.Errorf(
 			"cache %q (assetSize=%d > assetMaxSize=%d): %w",
 			fileName,
@@ -272,8 +268,10 @@ func (c *LocalAssetCache) Cache(fileName string) error {
 	defer func() { c.metrics.CacheSize.Set(float64(c.cacheSize)) }()
 
 	if asset.IsCached() {
+		c.metrics.CacheHits.Inc()
 		return nil
 	}
+	c.metrics.CacheMisses.Inc()
 
 	freeSpace := c.cacheMaxSize - c.cacheSize
 	if assetSize > freeSpace {
