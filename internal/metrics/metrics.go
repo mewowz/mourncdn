@@ -150,3 +150,7 @@ func (w *StatusWriter) Write(p []byte) (int, error) {
 func (w *StatusWriter) StatusString() string {
 	return strconv.Itoa(w.status)
 }
+
+func (w *StatusWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
