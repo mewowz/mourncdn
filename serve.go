@@ -161,7 +161,7 @@ func (s *LocalAssetServer) handleWriteAssetToClientError(
 func (s *LocalAssetServer) handleCacheAndFetchErr(
 	err error,
 	assetID string,
-	w *metricsServer.StatusWriter,
+	w http.ResponseWriter,
 	r *http.Request,
 ) {
 	writeErrorLogger := s.logger.With(
