@@ -500,6 +500,7 @@ func newHTTPAuthenticatorTestSetup(
 			"sqlite",
 			t.TempDir() + "/ts.db",
 			3 * time.Second,
+			60 * time.Second,
 		},
 		logger,
 	)

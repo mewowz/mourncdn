@@ -49,9 +49,10 @@ func defaultKoanfConfig() (*koanf.Koanf, error) {
 
 		"auth.public-key": "",
 
-		"token-store.dbdriver":               "sqlite",
-		"token-store.dbpath":                 "./data/ts.sql",
-		"token-store.advanced.db-op-timeout": "3s",
+		"token-store.dbdriver":                     "sqlite",
+		"token-store.dbpath":                       "./data/ts.sql",
+		"token-store.advanced.db-op-timeout":       "3s",
+		"token-store.advanced.db-cleanup-interval": "60s",
 
 		"metrics.address":                   "127.0.0.1:9884",
 		"metrics.endpoint":                  "/metrics",

@@ -32,6 +32,7 @@ token-store:
   dbpath: ./data/ts.sql
   advanced:
     db-op-timeout: 3s
+    db-cleanup-interval: 60s
 
 metrics:
   address: 127.0.0.1:9884

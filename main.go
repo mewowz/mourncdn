@@ -44,14 +44,17 @@ func run(logger *slog.Logger) error {
 			logger.Error("token store", "err", err)
 		}
 	}()
+	dbCleanupCtx, dbCleanupCancel := context.WithCancel(context.Background())
+	defer workersGroup.Wait()
+	defer dbCleanupCancel()
+	workersGroup.Go(func() {
+		tokenStore.CleanupExpiredTokensWorker(dbCleanupCtx)
+	})
 
 	reg := prometheus.NewRegistry()
 	metrics := metricsServer.NewMetrics(reg)
 	metricsCtx, metricsCancelF := context.WithCancel(context.Background())
-	defer func() {
-		metricsCancelF()
-		workersGroup.Wait()
-	}()
+	defer metricsCancelF()
 	workersGroup.Go(func() {
 		metricsErr := metricsServer.ServeMetricsWithContext(
 			metricsCtx,
@@ -97,6 +100,7 @@ func run(logger *slog.Logger) error {
 	}
 
 	metricsCancelF()
+	dbCleanupCancel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()

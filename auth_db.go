@@ -16,14 +16,18 @@ var (
 )
 
 type TokenStore struct {
-	db          *sql.DB
-	dbOpTimeout time.Duration
+	db                *sql.DB
+	dbOpTimeout       time.Duration
+	dbCleanupInterval time.Duration
+
+	logger *slog.Logger
 }
 
 type tokenStoreConfig struct {
-	DBDriver    string        `koanf:"dbdriver"`
-	DBPath      string        `koanf:"dbpath"`
-	DBOpTimeout time.Duration `koanf:"advanced.db-op-timeout"`
+	DBDriver          string        `koanf:"dbdriver"`
+	DBPath            string        `koanf:"dbpath"`
+	DBOpTimeout       time.Duration `koanf:"advanced.db-op-timeout"`
+	DBCleanupInterval time.Duration `koanf:"advanced.db-cleanup-interval"`
 }
 
 const DefaultDBOpTimeout = 3 * time.Second
@@ -40,6 +44,11 @@ INSERT INTO consumed_tokens (jti, expires_at)
 SELECT ?1, ?2
 WHERE ?2 > unixepoch('now')
 ON CONFLICT(jti) DO NOTHING
+`
+
+const authDBCleanupExpiredTokensString = `
+DELETE FROM consumed_tokens
+WHERE expires_at <= unixepoch('now')
 `
 
 func NewTokenStore(
@@ -59,8 +68,10 @@ func NewTokenStore(
 	}
 
 	return &TokenStore{
-		db:          db,
-		dbOpTimeout: config.DBOpTimeout,
+		db:                db,
+		dbOpTimeout:       config.DBOpTimeout,
+		dbCleanupInterval: config.DBCleanupInterval,
+		logger:            logger,
 	}, nil
 }
 
@@ -108,4 +119,26 @@ func (t *TokenStore) InsertToken(jti string, expiresAt int64) error {
 
 func (t *TokenStore) Close() error {
 	return t.db.Close()
+}
+
+func (t *TokenStore) CleanupExpiredTokensWorker(ctx context.Context) {
+	if t.dbCleanupInterval <= 0 {
+		return
+	}
+	ticker := time.NewTicker(t.dbCleanupInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			dbCtx, cancel := context.WithTimeout(ctx, t.dbOpTimeout)
+			_, err := t.db.ExecContext(dbCtx, authDBCleanupExpiredTokensString)
+			cancel()
+			if err != nil && ctx.Err() == nil {
+				t.logger.Error("db cleanup", "err", err)
+			}
+		}
+	}
 }

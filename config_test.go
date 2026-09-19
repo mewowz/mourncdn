@@ -49,6 +49,7 @@ token-store:
   dbpath: ./custom/tokens.db
   advanced:
     db-op-timeout: 750ms
+    db-cleanup-interval: 60s
 
 metrics:
   address: localhost:9885
@@ -94,9 +95,10 @@ metrics:
 			PublicKey: "bXeoO889+s+4tTCGZc8uaFyIe5fuwz9RZNc6W+Keqvo=",
 		},
 		TokenStoreCfg: tokenStoreConfig{
-			DBDriver:    "sqlite",
-			DBPath:      "./custom/tokens.db",
-			DBOpTimeout: 750 * time.Millisecond,
+			DBDriver:          "sqlite",
+			DBPath:            "./custom/tokens.db",
+			DBOpTimeout:       750 * time.Millisecond,
+			DBCleanupInterval: 60 * time.Second,
 		},
 		MetricsCfg: metrics.MetricsServerConfig{
 			Addr:                   "localhost:9885",
@@ -138,18 +140,20 @@ func TestLoadConfigFileAuthDefaults(t *testing.T) {
 			"missing auth and token store sections use defaults",
 			"{}\n",
 			tokenStoreConfig{
-				DBDriver:    "sqlite",
-				DBPath:      "./data/ts.sql",
-				DBOpTimeout: 3 * time.Second,
+				DBDriver:          "sqlite",
+				DBPath:            "./data/ts.sql",
+				DBOpTimeout:       3 * time.Second,
+				DBCleanupInterval: 60 * time.Second,
 			},
 		},
 		{
 			"partial token store config retains remaining defaults",
 			"token-store:\n  dbpath: ./custom/tokens.db\n",
 			tokenStoreConfig{
-				DBDriver:    "sqlite",
-				DBPath:      "./custom/tokens.db",
-				DBOpTimeout: 3 * time.Second,
+				DBDriver:          "sqlite",
+				DBPath:            "./custom/tokens.db",
+				DBOpTimeout:       3 * time.Second,
+				DBCleanupInterval: 60 * time.Second,
 			},
 		},
 	}
