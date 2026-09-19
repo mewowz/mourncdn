@@ -133,6 +133,7 @@ func TestNewTokenStore(t *testing.T) {
 }
 
 func TestTokenStore_InsertToken(t *testing.T) {
+	timeNow := time.Now().Unix()
 	tests := []struct {
 		name              string
 		jti               string
@@ -143,20 +144,20 @@ func TestTokenStore_InsertToken(t *testing.T) {
 	}{
 		{
 			"unused token is consumed",
-			"token-1", 200,
-			"", 0,
+			"token-1", 200 + timeNow,
+			"", 0 + timeNow,
 			nil,
 		},
 		{
 			"consumed token is rejected",
-			"token-1", 300,
-			"token-1", 200,
+			"token-1", 300 + timeNow,
+			"token-1", 200 + timeNow,
 			ErrTokenAlreadyConsumed,
 		},
 		{
 			"different token is accepted",
-			"token-2", 300,
-			"token-1", 200,
+			"token-2", 300 + timeNow,
+			"token-1", 200 + timeNow,
 			nil,
 		},
 	}
@@ -216,6 +217,30 @@ func TestTokenStore_InsertToken(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("expired token is rejected", func(t *testing.T) {
+		store, err := NewTokenStore(
+			tokenStoreConfig{
+				"sqlite",
+				filepath.Join(t.TempDir(), "ts.db"),
+				3 * time.Second,
+			},
+			slog.New(slog.DiscardHandler),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if err := store.Close(); err != nil {
+				t.Errorf("close token store: %v", err)
+			}
+		})
+
+		err = store.InsertToken("token-1", 0)
+		if !errors.Is(err, ErrTokenAlreadyConsumed) {
+			t.Fatal(err)
+		}
+	})
 }
 
 func TestTokenStore_InsertTokenConcurrent(t *testing.T) {
@@ -237,7 +262,7 @@ func TestTokenStore_InsertTokenConcurrent(t *testing.T) {
 	})
 
 	jti := "token1"
-	expiresAt := int64(100)
+	expiresAt := int64(100 + time.Now().Unix())
 	mu := sync.Mutex{}
 	var results []error
 	nGoroutines := 100

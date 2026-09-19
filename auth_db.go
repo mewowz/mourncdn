@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS consumed_tokens (
 
 const authDBInsertTokenString = `
 INSERT INTO consumed_tokens (jti, expires_at)
-VALUES (?, ?)
+SELECT ?1, ?2
+WHERE ?2 > unixepoch('now')
 ON CONFLICT(jti) DO NOTHING
 `
 
