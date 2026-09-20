@@ -18,5 +18,6 @@ COPY --from=build /bin/mourncdn /app/mourncdn
 COPY config.yml /app/config.yml
 
 EXPOSE 9743
+EXPOSE 9884
 
 ENTRYPOINT ["/app/mourncdn"]
