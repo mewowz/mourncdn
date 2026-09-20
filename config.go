@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"reflect"
 
 	"github.com/mewowz/mourncdn/internal/metrics"
@@ -74,7 +76,9 @@ func LoadConfigFile(path string) (*Config, error) {
 	}
 	f := file.Provider(path)
 	if err := k.Load(f, yaml.Parser()); err != nil {
-		return nil, fmt.Errorf("config file %q: %w", path, err)
+		if path != DefaultConfigPath || !errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("config file %q: %w", path, err)
+		}
 	}
 
 	dc := mapstructure.DecoderConfig{
