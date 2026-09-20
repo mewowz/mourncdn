@@ -1,0 +1,19 @@
+services:
+  mourncdn:
+    build: .
+    configs:
+      - source: mourncdn-config
+        target: /app/config.yml
+    volumes:
+      - mourncdn-data:/app/data
+    ports:
+      - 9743:9743
+    restart: unless-stopped
+    stop_grace_period: 70s
+
+configs:
+  mourncdn-config:
+    file: ./config.yml
+
+volumes:
+  mourncdn-data:
