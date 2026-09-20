@@ -24,6 +24,7 @@ func TestNewAuthDB(t *testing.T) {
 				"sqlite",
 				filepath.Join(tempDirPath, "ts.db"),
 				3 * time.Second,
+				60 * time.Second,
 			},
 			nil,
 		},
@@ -33,6 +34,7 @@ func TestNewAuthDB(t *testing.T) {
 				"sqlite",
 				"",
 				3 * time.Second,
+				60 * time.Second,
 			},
 			ErrMissingDBPath,
 		},
@@ -63,35 +65,35 @@ func TestNewTokenStore(t *testing.T) {
 	}{
 		{
 			"no errors; good config",
-			tokenStoreConfig{"sqlite", filepath.Join(tempDirPath, "good.db"), time.Second},
+			tokenStoreConfig{"sqlite", filepath.Join(tempDirPath, "good.db"), time.Second, 60 * time.Second},
 			logger,
 			time.Second,
 			nil,
 		},
 		{
 			"zero timeout uses default",
-			tokenStoreConfig{"sqlite", filepath.Join(tempDirPath, "zero.db"), 0},
+			tokenStoreConfig{"sqlite", filepath.Join(tempDirPath, "zero.db"), 0, 60 * time.Second},
 			logger,
 			DefaultDBOpTimeout,
 			nil,
 		},
 		{
 			"negative timeout uses default",
-			tokenStoreConfig{"sqlite", filepath.Join(tempDirPath, "negative.db"), -time.Second},
+			tokenStoreConfig{"sqlite", filepath.Join(tempDirPath, "negative.db"), -time.Second, 60 * time.Second},
 			logger,
 			DefaultDBOpTimeout,
 			nil,
 		},
 		{
 			"nil logger",
-			tokenStoreConfig{"sqlite", filepath.Join(tempDirPath, "nil-logger.db"), time.Second},
+			tokenStoreConfig{"sqlite", filepath.Join(tempDirPath, "nil-logger.db"), time.Second, 60 * time.Second},
 			nil,
 			time.Second,
 			nil,
 		},
 		{
 			"missing db path propagates error",
-			tokenStoreConfig{"sqlite", "", time.Second},
+			tokenStoreConfig{"sqlite", "", time.Second, 60 * time.Second},
 			logger,
 			time.Second,
 			ErrMissingDBPath,
@@ -169,6 +171,7 @@ func TestTokenStore_InsertToken(t *testing.T) {
 					"sqlite",
 					filepath.Join(t.TempDir(), "ts.db"),
 					3 * time.Second,
+					60 * time.Second,
 				},
 				slog.New(slog.DiscardHandler),
 			)
@@ -224,6 +227,7 @@ func TestTokenStore_InsertToken(t *testing.T) {
 				"sqlite",
 				filepath.Join(t.TempDir(), "ts.db"),
 				3 * time.Second,
+				60 * time.Second,
 			},
 			slog.New(slog.DiscardHandler),
 		)
@@ -249,6 +253,7 @@ func TestTokenStore_InsertTokenConcurrent(t *testing.T) {
 			"sqlite",
 			filepath.Join(t.TempDir(), "ts.db"),
 			3 * time.Second,
+			60 * time.Second,
 		},
 		slog.New(slog.DiscardHandler),
 	)
@@ -306,6 +311,7 @@ func TestTokenStore_Close(t *testing.T) {
 			"sqlite",
 			filepath.Join(t.TempDir(), "ts.db"),
 			3 * time.Second,
+			60 * time.Second,
 		},
 		slog.New(slog.DiscardHandler),
 	)
