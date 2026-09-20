@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	metricsServer "github.com/mewowz/mourncdn/internal/metrics"
@@ -105,6 +106,35 @@ func (s *LocalAssetServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	assetID := r.PathValue("id")
+
+	if r.Method == http.MethodHead {
+		asset, err := s.cache.Fetch(assetID)
+		if err != nil {
+			s.handleCacheAndFetchErr(err, assetID, sw, r)
+			return
+		}
+		assetReader, err := asset.Open()
+		if err != nil {
+			s.handleCacheAndFetchErr(err, assetID, sw, r)
+			return
+		}
+		defer assetReader.Close()
+
+		var prefix [512]byte
+		n, err := io.ReadFull(assetReader, prefix[:])
+		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+			s.handleCacheAndFetchErr(err, assetID, sw, r)
+			return
+		}
+
+		if n > 0 {
+			sw.Header().Set("Content-Type", http.DetectContentType(prefix[:n]))
+		}
+		sw.Header().Set("Content-Length", strconv.FormatInt(asset.FileInfo.Size(), 10))
+		sw.WriteHeader(http.StatusOK)
+		return
+	}
+
 	asset, err := s.cacheAndFetch(assetID)
 	if err != nil {
 		s.handleCacheAndFetchErr(err, assetID, sw, r)
