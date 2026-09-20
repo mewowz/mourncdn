@@ -121,7 +121,7 @@ func TestLoadConfigFileExampleDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := LoadConfigFile("config-example.yml")
+	got, err := LoadConfigFile("config_test.yml")
 	if err != nil {
 		t.Fatal(err)
 	}
