@@ -3,20 +3,20 @@
 MournCDN is a small project for deploying a CDN quickly to serve & consume assets. This was originally written for [mourn](https://mourn.bio) and serving their users.
 
 ## Install
-#### Download
+### Download
 Download by:
 ```
 git clone https://github.com/mewowz/mourncdn
 cd mourncdn
 ```
-#### Configure
+### Configure
 Configure the server by editing `config.yml`. Most defaults will not need to be adjusted.
 Please set your public key for the capabilities signing server under the `auth` section of the config
 ```
 auth:
   public-key: Set your base64-encoded 32-byte Ed25519 public key here
 ```
-#### Running
+### Running
 After configuring, there are two ways to run the server:
 1. Docker Compose (preferred)
 ```
