@@ -18,11 +18,11 @@ auth:
 ```
 ### Running
 After configuring, there are two ways to run the server:
-1. Docker Compose (preferred)
+1. **Docker Compose** (preferred)
 ```
 docker compose up -d
 ```
-2. Locally
+2. **Locally**
 ```
 mkdir -p ./data/tmp ./data/assets
 CGO_ENABLED=0 go build -o mourncdn .
