@@ -148,6 +148,7 @@ func (s *LocalAssetServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer assetReader.Close()
 
+	sw.Header().Set("Content-Length", strconv.FormatInt(asset.FileInfo.Size(), 10))
 	err = s.writeAssetToClient(assetReader, sw, r)
 	if err != nil {
 		s.handleWriteAssetToClientError(assetID, r, err)
